@@ -387,6 +387,7 @@ const MAX_ZIP_FILE     = 32 * 1048576;
 const MAX_ZIP_TOTAL    = 256 * 1048576;
 const QUEUE_MAX        = 2;
 const WATCHDOG_MS      = 180000;
+const MAX_PDF_COLS     = 24;   /* больше — сетка явно распознана неверно */
 
 const NS_REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
 const NS_A   = 'http://schemas.openxmlformats.org/drawingml/2006/main';
@@ -427,7 +428,6 @@ function outName(file){
   if (!ext || base === '') return file.name + '.md';
   return base + '.md';
 }
-/* нормализация NBSP и пустых строк — только ВНЕ code-fence */
 function tidy(md){
   const lines = md.split('\n');
   const out = [];
@@ -483,18 +483,22 @@ function toast(msg, type = 'ok'){
   el.querySelector('.toast-x').addEventListener('click', () => { clearTimeout(timer); el.remove(); });
 }
 
+/* ═══════════════════════ умное экранирование (фикс «агента экранирования») ═══════════════════════
+   Markdown считает < опасным только перед буквой/!/ ?/ / (начало HTML-тега):
+   <= и a < b остаются литералами, <img — экранируется. */
+const isHtmlStart = (full, off) => /[A-Za-z!/?]/.test(full[off + 1] || '');
+const smartLt = s => String(s).replace(/</g, (m, off, full) => isHtmlStart(full, off) ? '&lt;' : '<');
+
 /* ═══════════════════════ таблицы ═══════════════════════ */
 function rowsToGfm(rows){
   if (!rows.length) return '';
   const norm = s => {
     const t = String(s).replace(/^[ \t\u00a0]+|[ \t\u00a0]+$/g, '');
     if (t === '') return ' ';
-    return t
+    return smartLt(t)
       .replace(/\\/g, '\\\\')
       .replace(/\|/g, '\\|')
       .replace(/`/g, '\\`')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
       .replace(/\r?\n/g, '<br>');
   };
   const width = Math.max(1, ...rows.map(r => r.length));
@@ -512,10 +516,10 @@ function rowsToHtml(rows){
   rows.slice(1).forEach(r => { h += '    <tr>' + r.map(c => '<td>' + escHtml(c) + '</td>').join('') + '</tr>\n'; });
   return h + '  </tbody>\n</table>';
 }
-const mdInline = s => String(s)
-  .replace(/[\x00-\x1f\x7f]+/g, ' ')
-  .replace(/</g, '&lt;')
-  .replace(/>/g, '&gt;');
+/* inline-текст (абзацы PDF/PPTX, имена листов): < — умно, > — только в начале строки,
+   иначе Markdown превратил бы его в цитату */
+const mdInline = s => smartLt(String(s).replace(/[\x00-\x1f\x7f]+/g, ' '))
+  .replace(/^([ \t]{0,3})>/, '$1&gt;');
 
 /* ═══════════════════════ точные числа (Excel/CSV) ═══════════════════════ */
 function preciseNumber(v){
@@ -648,19 +652,16 @@ async function sheetsToMd(wb, opts){
   return md + '\n';
 }
 
-/* ═══ PDF v2: layout-анализ, таблицы по координатам, sub/sup, bold, заголовки ═══ */
+/* ═══ PDF v2: layout-анализ, таблицы, sub/sup, bold, заголовки ═══ */
 
 function medianOf(arr){
   if (!arr.length) return 0;
   const s = arr.slice().sort((a,b) => a - b);
   return s[Math.floor(s.length / 2)];
 }
-/* NBSP-aware: срезаем только пробелы/табы, неразрывный пробел сохраняем */
 const trimPdf = s => String(s).replace(/^[ \t]+|[ \t]+$/g, '');
 const hasWs = s => /[\u00a0 \t]$/.test(s);
 
-/* жирность шрифта: styles из getTextContent + commonObjs (внутренний API pdf.js,
-   обёрнуто в try/catch — не узнали шрифт ⇒ просто без «**», ничего не ломается) */
 function makeBoldLookup(page, styles){
   const cache = new Map();
   return function isBold(fontName){
@@ -683,8 +684,6 @@ function makeBoldLookup(page, styles){
   };
 }
 
-/* сборка визуальных строк: суперскрипты (базовая линия поднята) и подстрочные
-   (опущена) попадают в ту же строку; допуск — от максимума высот */
 function buildPdfLines(items, isBold){
   const sorted = items.slice().sort((a,b) => (b.y - a.y) || (a.x - b.x));
   const lines = [];
@@ -706,7 +705,6 @@ function buildPdfLines(items, isBold){
     const baseY = bodyParts.length ? Math.max.apply(null, bodyParts.map(p => p.y)) : L.y;
     L.baseY = baseY;
     L.bold = L.parts.length > 0 && L.parts.every(p => isBold(p.fontName));
-    /* сегменты по жирности; роль (base/sup/sub) → payload; NBSP-бережно */
     const segs = [];
     let prev = null;
     for (const p of L.parts){
@@ -725,7 +723,6 @@ function buildPdfLines(items, isBold){
         const startHasWs = /^[\u00a0 \t]/.test(p.str);
         if (gap > Math.max(1, L.h * 0.18) && !endHasWs && !startHasWs) needSpace = true;
       }
-      /* скобки в ^{}/_{} обязательны: H_2_O без скобок GitHub рендерил бы как курсив */
       const payload = role === 'sup' ? '^{'+p.str+'}' : role === 'sub' ? '_{'+p.str+'}' : p.str;
       const bold = isBold(p.fontName);
       const last = segs[segs.length - 1];
@@ -749,47 +746,56 @@ function buildPdfLines(items, isBold){
   return { lines, wordGaps };
 }
 
-/* ── таблицы: зазоры → кандидаты → группы → кластеры колонок → сетка ── */
+/* ── таблицы PDF: реконструкция сетки ПО ГРАНИЦАМ (фикс «агента PDF-таблиц») ──
+   Границы колонок = середины больших зазоров, собранные по всем строкам группы
+   и сгруппированные. Устойчиво к центрированным и узким колонкам, где стартовые
+   X фрагментов у каждой строки свои (старый алгоритм плодил фантомные колонки). */
 function isRuleLine(L){
   return L.parts.length <= 2 && /^[\s\-–—_=∙·•]{3,}$/.test(L.text);
 }
-function gridFromLines(group, bodyH, medGap){
-  const TOL = Math.max(bodyH * 0.9, medGap * 2.5);
+function gridFromLines(group, bodyH, medGap, BIG){
   const rowLines = group.filter(L => !isRuleLine(L));
-  const starts = [];
-  rowLines.forEach(L => L.parts.forEach(p => starts.push(p.x)));
-  if (!starts.length) return null;
-  starts.sort((a,b) => a - b);
-  const clusters = [];
-  for (const x of starts){
-    const last = clusters[clusters.length - 1];
-    if (last === undefined || x - last > TOL) clusters.push(x);
+  const bounds = [];
+  for (const L of rowLines){
+    for (let i = 1; i < L.parts.length; i++){
+      const gap = L.parts[i].x - (L.parts[i-1].x + L.parts[i-1].w);
+      if (gap >= BIG) bounds.push(L.parts[i-1].x + L.parts[i-1].w + gap / 2);
+    }
   }
+  if (!bounds.length) return null;
+  bounds.sort((a,b) => a - b);
+  /* соседние границы одной колонки слипаются в одну (цепочечная группировка) */
+  const LINK = Math.max(BIG * 0.5, bodyH);
+  const cols = [];
+  let acc = [];
+  for (const b of bounds){
+    if (!acc.length || b - acc[acc.length - 1] <= LINK) acc.push(b);
+    else { cols.push(acc.reduce((s,v) => s + v, 0) / acc.length); acc = [b]; }
+  }
+  if (acc.length) cols.push(acc.reduce((s,v) => s + v, 0) / acc.length);
+  if (cols.length < 1 || cols.length > MAX_PDF_COLS) return null;
+  const width = cols.length + 1;
   const rows = [];
   for (const L of rowLines){
-    const cells = new Array(clusters.length).fill('');
-    const assigned = new Array(clusters.length).fill(false);
+    const cells = new Array(width).fill('');
+    const assigned = new Array(width).fill(false);
     for (const p of L.parts){
-      let best = -1, bestD = Infinity;
-      for (let ci = 0; ci < clusters.length; ci++){
-        const d = Math.abs(p.x - clusters[ci]);
-        if (d < bestD){ bestD = d; best = ci; }
-      }
-      if (best === -1 || bestD > TOL * 1.6) continue;
+      let ci = 0;
+      while (ci < cols.length && p.x >= cols[ci]) ci++;
       const piece = trimPdf(p.str);
       if (piece === '') continue;
-      cells[best] = assigned[best] ? cells[best] + ' ' + piece : piece;
-      assigned[best] = true;
+      cells[ci] = assigned[ci] ? cells[ci] + ' ' + piece : piece;
+      assigned[ci] = true;
     }
     rows.push(cells);
   }
   const dataRows = rows.filter(r => r.some(c => c !== ''));
   if (dataRows.length < 2) return null;
   let filledCols = 0;
-  for (let ci = 0; ci < clusters.length; ci++) if (dataRows.some(r => r[ci] !== '')) filledCols++;
+  for (let ci = 0; ci < width; ci++) if (dataRows.some(r => r[ci] !== '')) filledCols++;
   if (filledCols < 2) return null;
   /* двухколоночная вёрстка — не таблица: ровно 2 колонки и длинные «ячейки» */
-  if (clusters.length === 2 && dataRows.length >= 4){
+  if (width === 2 && dataRows.length >= 4){
     const avg = dataRows.reduce((s, r) => s + r[0].length + r[1].length, 0) / (2 * dataRows.length);
     if (avg > 90) return null;
   }
@@ -815,21 +821,20 @@ function detectPdfTables(lines, bodyH, medGap){
     let j = i;
     while (j + 1 < lines.length){
       if (cand[j + 1]) j++;
-      else if (j + 2 < lines.length && isRuleLine(lines[j + 1]) && cand[j + 2]) j += 2; /* линия-разделитель шапки */
+      else if (j + 2 < lines.length && isRuleLine(lines[j + 1]) && cand[j + 2]) j += 2;
       else break;
     }
-    const md = gridFromLines(lines.slice(i, j + 1), bodyH, medGap);
+    const md = gridFromLines(lines.slice(i, j + 1), bodyH, medGap, BIG);
     if (md) tables.push({ start: i, end: j, md });
     i = j + 1;
   }
   return tables;
 }
 
-/* ── заголовки: кегль + жирность + нумерация + «короткая отдельная строка» ── */
 function pdfHeadingLevel(L, med){
   const t = L.text;
   if (!t || t.length > 120) return 0;
-  if (/(?:[a-zа-яё)]|\d)[.!?]$/.test(t)) return 0; /* предложение, не заголовок */
+  if (/(?:[a-zа-яё)]|\d)[.!?]$/.test(t)) return 0;
   const big = L.h >= med * 1.5;
   const mid = L.h >= med * 1.22;
   const numbered = /^\d+(?:\.\d+)*[.)]?\s+\S/.test(t) ||
@@ -840,7 +845,6 @@ function pdfHeadingLevel(L, med){
   return 0;
 }
 
-/* ── сборка страницы: таблицы → заголовки → абзацы ── */
 function assemblePdfPage(lines, tables, med){
   const tableByStart = new Map(tables.map(t => [t.start, t]));
   const out = [];
@@ -863,11 +867,11 @@ function assemblePdfPage(lines, tables, med){
     i++;
     while (i < lines.length && !tableByStart.has(i)){
       const N = lines[i];
-      if (pdfHeadingLevel(N, med)) break; /* заголовок — всегда отдельный блок */
+      if (pdfHeadingLevel(N, med)) break;
       const gap = prevY - N.baseY;
-      if (!(gap > 0 && gap <= med * 2)) break; /* межабзацный разрыв */
+      if (!(gap > 0 && gap <= med * 2)) break;
       if (/[A-Za-zА-Яа-яЁё]-$/.test(para) && /^[a-zа-яё]/.test(N.text))
-        para = para.slice(0, -1) + N.text;     /* дефисный перенос, цифры не трогаем */
+        para = para.slice(0, -1) + N.text;
       else para += ' ' + N.text;
       prevY = N.baseY;
       i++;
@@ -893,7 +897,6 @@ async function pdfToMd(buf, opts){
   const pageLines = [];
   const allH = [], allGaps = [];
 
-  /* проход 1: извлечение и сборка строк (disableNormalization — без NFKC/лигатурных подмен) */
   for (let p = 1; p <= count; p++){
     if (opts.isCancelled && opts.isCancelled()) throw fail('Конвертация отменена');
     if (opts.onProgress) opts.onProgress(`Страница ${p} из ${count}`);
@@ -919,12 +922,11 @@ async function pdfToMd(buf, opts){
   const med = medianOf(allH);
   const medGap = allGaps.length ? medianOf(allGaps) : med * 0.25;
 
-  /* проход 2: таблицы → блоки → страницы */
   const pageTexts = pageLines.map((lines, pi) => {
     if (!lines.some(L => L.text)) return `<!-- на странице ${pi + 1} нет текстового слоя -->`;
     const tables = detectPdfTables(lines, med, medGap);
     const md = assemblePdfPage(lines, tables, med);
-    lines.forEach(L => { L.parts = null; }); /* память: геометрия больше не нужна */
+    lines.forEach(L => { L.parts = null; });
     return md || `<!-- на странице ${pi + 1} нет текстового слоя -->`;
   });
 
@@ -1256,6 +1258,7 @@ function retryEntry(id){
   f.status = 'working'; f.error = null; f.md = '';
   f.cancelled = false; f.edited = false; f.cursor = null;
   f.started = false; f.progress = null;
+  f._pv = null; /* фикс: кэш предпросмотра сбрасывается и при повторе тоже */
   f.opts = makeOpts(f);
   enqueue(f);
   updateUI();
@@ -1442,10 +1445,8 @@ function renderViewer(){
     renderPreviewInto(p, f);
     body.appendChild(p); return;
   }
-  /* Режим «Разметка». Ранний выход — только если редактор этого файла
-     и он ЕДИНСТВЕННОЕ содержимое экрана (иначе на экране могли остаться
-     спиннер/ошибка/предпросмотр — это и был баг «значок крутится вечно»).
-     При любом другом содержимом экран очищается целиком. */
+  /* Режим «Разметка»: ранний выход, только если редактор этого файла —
+     единственное содержимое экрана; иначе экран очищается целиком */
   const existing = body.querySelector('.v-src');
   if (existing && existing.dataset.fileId === String(f.id) && body.children.length === 1) return;
   saveCursor(body);
