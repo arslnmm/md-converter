@@ -291,7 +291,7 @@ footer .wrap{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;
   <noscript><section style="border:2px solid #B3361B;padding:20px;margin-bottom:24px"><h2>Требуется JavaScript</h2><p style="margin-top:8px">Конвертер работает полностью в браузере — включите JavaScript и обновите страницу.</p></section></noscript>
 
   <section class="hero">
-    <h1 class="hero-title">Конвертируйте свои файлы<br>в
+    <h1 class="hero-title">Конвертируйте свои файлы в <br>
       <span class="u-word">Markdown<svg viewBox="0 0 200 14" preserveAspectRatio="none" aria-hidden="true" focusable="false"><path pathLength="1" d="M3 10 Q 100 1 197 8"/></svg></span>
     </h1>
     <p class="hero-sub">Word, Excel, PowerPoint, PDF, CSV, HTML, изображения, исходный код и обычный текст превращаются в чистую разметку <b>прямо в вашем браузере</b> — файлы нигде не сохраняются и никуда не отправляются.</p>
@@ -397,7 +397,6 @@ function requireEngine(key, human){
     throw fail('Движок ' + human + ' не загрузился — проверьте доступ к CDN и обновите страницу.');
 }
 
-/* декодирование: UTF-16 по BOM, иначе строгий UTF-8, при сбое — cp1251 */
 function decodeText(buf){
   const u8 = new Uint8Array(buf);
   if (u8[0] === 0xFF && u8[1] === 0xFE) return new TextDecoder('utf-16le').decode(buf);
@@ -487,7 +486,7 @@ function toast(msg, type = 'ok'){
 function rowsToGfm(rows){
   if (!rows.length) return '';
   const norm = s => {
-    const t = String(s).trim();
+    const t = String(s).replace(/^[ \t\u00a0]+|[ \t\u00a0]+$/g, ''); /* NBSP на краях сохраняется в PDF, тут только чистка краёв */
     if (t === '') return ' ';
     return t
       .replace(/\\/g, '\\\\')
@@ -504,7 +503,7 @@ function rowsToGfm(rows){
     return '| ' + c.map(x => norm(x)).join(' | ') + ' |';
   };
   const out = [pad(rows[0]), '| ' + Array.from({length: width}, () => '---').join(' | ') + ' |'];
-  rows.slice(1).forEach(r => { if (r.some(c => String(c).trim() !== '')) out.push(pad(r)); });
+  rows.slice(1).forEach(r => { if (r.some(c => String(c).replace(/^[ \t\u00a0]+|[ \t\u00a0]+$/g,'') !== '')) out.push(pad(r)); });
   return out.join('\n');
 }
 function rowsToHtml(rows){
@@ -518,13 +517,10 @@ const mdInline = s => String(s)
   .replace(/>/g, '&gt;');
 
 /* ═══════════════════════ точные числа (Excel/CSV) ═══════════════════════ */
-/* Excel хранит максимум 15 значащих цифр — больше в файле физически нет.
-   toPrecision(15) заодно убирает float-шум (0.1+0.2 → 0.3, а не 0.30000000000000004). */
 function preciseNumber(v){
   if (!Number.isFinite(v)) return String(v);
   return String(parseFloat(v.toPrecision(15)));
 }
-/* число из отображаемого текста: пробелы-разделители, запятая ИЛИ точка как десятичный знак */
 function parseDisplay(s){
   let t = String(s).replace(/[\s\u00a0\u202f]/g, '');
   const lastComma = t.lastIndexOf(',');
@@ -533,7 +529,6 @@ function parseDisplay(s){
   else t = t.replace(/,/g, '');
   return Number(t);
 }
-/* отображение честно передаёт значение? («2,50» при 2.5 — да; «3,14» при 3.141593 — нет) */
 function sameNumber(displayText, v){
   const n = parseDisplay(displayText);
   return Number.isFinite(n) && n === v;
@@ -542,28 +537,26 @@ function fmtIsDate(z){
   try { return !!(z && XLSX.SSF && XLSX.SSF.is_date && XLSX.SSF.is_date(z)); }
   catch(e){ return false; }
 }
-/* значение ячейки: даты — как даты; числа — без потерь точности */
 function cellText(cell){
   if (!cell) return '';
   switch (cell.t){
     case 'n':
       if (fmtIsDate(cell.z)) return cell.w != null ? cell.w : preciseNumber(cell.v);
-      if (cell.w != null && sameNumber(cell.w, cell.v)) return cell.w; /* показ без потерь — оставляем как в Excel */
-      return preciseNumber(cell.v);                                      /* формат срезал цифры — отдаём всё число */
+      if (cell.w != null && sameNumber(cell.w, cell.v)) return cell.w;
+      return preciseNumber(cell.v);
     case 'b': return cell.w != null ? cell.w : (cell.v ? 'TRUE' : 'FALSE');
     case 'e': return cell.w != null ? cell.w : String(cell.v);
     case 's': case 'str': return cell.v != null ? String(cell.v) : '';
     default:  return cell.w != null ? cell.w : (cell.v != null ? String(cell.v) : '');
   }
 }
-/* обход реальных ячеек листа (без материлизации пустых строк — бережём память) */
 function sheetToRowsExact(ws){
   if (!ws || !ws['!ref']) return [];
   const range = XLSX.utils.decode_range(ws['!ref']);
   const rowMap = new Map();
   let maxC = range.s.c;
   for (const key of Object.keys(ws)){
-    if (key.charCodeAt(0) === 33) continue; /* '!' — служебные поля листа */
+    if (key.charCodeAt(0) === 33) continue;
     let addr;
     try { addr = XLSX.utils.decode_cell(key); } catch(e){ continue; }
     if (!rowMap.has(addr.r)) rowMap.set(addr.r, new Map());
@@ -628,7 +621,6 @@ async function docxToMd(buf, opts){
   return tidy(makeTurndown(opts.gfm).turndown(html));
 }
 
-/* Excel / CSV: точные числа (по умолчанию) или «как отображается в Excel» */
 async function sheetsToMd(wb, opts){
   const names = wb.SheetNames.slice(0, MAX_SHEETS);
   const multi = names.length > 1;
@@ -655,6 +647,239 @@ async function sheetsToMd(wb, opts){
   return md + '\n';
 }
 
+/* ═══ PDF v2: layout-анализ, таблицы по координатам, sub/sup, bold, заголовки ═══
+   Lossless-контракт: disableNormalization (pdf.js не трогает лигатуры/кавычки),
+   NBSP не превращается в пробел (в JS \s включает \u00a0 — всюду осознанные trims),
+   экранируются только < > (плюс служебные символы таблиц). */
+
+function medianOf(arr){
+  if (!arr.length) return 0;
+  const s = arr.slice().sort((a,b) => a - b);
+  return s[Math.floor(s.length / 2)];
+}
+/* NBSP-aware: срезаем только пробелы/табы, неразрывный пробел (сотни/десятичные) сохраняем */
+const trimPdf = s => String(s).replace(/^[ \t]+|[ \t]+$/g, '');
+const hasWs = s => /[\u00a0 \t]$/.test(s);
+
+/* жирность шрифта: styles из getTextContent + commonObjs (внутренний API pdf.js,
+   обёрнуто в try/catch — не узнали шрифт ⇒ просто без «**», ничего не ломается) */
+function makeBoldLookup(page, styles){
+  const cache = new Map();
+  return function isBold(fontName){
+    if (!fontName) return false;
+    if (cache.has(fontName)) return cache.get(fontName);
+    let bold = false;
+    try {
+      const fam = styles && styles[fontName] ? String(styles[fontName].fontFamily || '') : '';
+      if (/bold|black|heavy|semib/i.test(fam)) bold = true;
+    } catch(e){}
+    if (!bold){
+      try {
+        const fo = page.commonObjs.get(fontName);
+        const nm = String((fo && (fo.name || fo.fallbackName || '')) || '');
+        if (/bold|black|heavy|semib/i.test(nm)) bold = true;
+      } catch(e){}
+    }
+    cache.set(fontName, bold);
+    return bold;
+  };
+}
+
+/* сборка визуальных строк: суперскрипты (базовая линия поднята) и подстрочные
+   (опущена) попадают в ту же строку; допуск — от максимума высот, иначе
+   «²» с y выше основания рвал строку при сортировке по −Y */
+function buildPdfLines(items, isBold){
+  const sorted = items.slice().sort((a,b) => (b.y - a.y) || (a.x - b.x));
+  const lines = [];
+  const wordGaps = [];
+  let cur = null;
+  for (const it of sorted){
+    const tol = cur ? Math.max(1.6, Math.max(cur.h, it.h) * 0.6) : 0;
+    if (cur && Math.abs(cur.y - it.y) <= tol){
+      cur.parts.push(it);
+      if (it.h > cur.h) cur.h = it.h;
+    } else {
+      cur = { y: it.y, h: it.h, parts: [it] };
+      lines.push(cur);
+    }
+  }
+  for (const L of lines){
+    L.parts.sort((a,b) => a.x - b.x);
+    const bodyParts = L.parts.filter(p => p.h >= L.h * 0.85);
+    const baseY = bodyParts.length ? Math.max.apply(null, bodyParts.map(p => p.y)) : L.y;
+    L.baseY = baseY;
+    L.bold = L.parts.length > 0 && L.parts.every(p => isBold(p.fontName));
+    /* сегменты по жирности; роль (base/sup/sub) → payload; NBSP-бережно */
+    const segs = [];
+    let prev = null;
+    for (const p of L.parts){
+      let role = 'base';
+      if (p.h < L.h * 0.8){
+        const rel = (p.y - baseY) / Math.max(1, L.h);
+        if (rel > 0.15) role = 'sup';
+        else if (rel < -0.15) role = 'sub';
+      }
+      let needSpace = false;
+      if (prev){
+        const gap = p.x - (prev.x + prev.w);
+        if (gap > 0 && gap < L.h * 0.8) wordGaps.push(gap);
+        const lastSeg = segs[segs.length - 1];
+        const endHasWs = lastSeg ? hasWs(lastSeg.text) : false;
+        const startHasWs = /^[\u00a0 \t]/.test(p.str);
+        if (gap > Math.max(1, L.h * 0.18) && !endHasWs && !startHasWs) needSpace = true;
+      }
+      /* скобки в ^{}/_{} обязательны: H_2_O без скобок GitHub рендерил бы как курсив */
+      const payload = role === 'sup' ? '^{'+p.str+'}' : role === 'sub' ? '_{'+p.str+'}' : p.str;
+      const bold = isBold(p.fontName);
+      const last = segs[segs.length - 1];
+      if (last && last.bold === bold) last.text += (needSpace ? ' ' : '') + payload;
+      else segs.push({ bold, lead: needSpace, text: payload });
+      prev = p;
+    }
+    let out = '';
+    for (const s of segs){
+      let piece = s.text;
+      if (out && s.lead && !hasWs(out)) piece = ' ' + piece;
+      if (s.bold){
+        const t = piece.replace(/^[ \t]+|[ \t]+$/g, '');
+        const pre = /^[ \t]/.test(piece) ? ' ' : '';
+        const post = /[ \t]$/.test(piece) ? ' ' : '';
+        out += t ? pre + '**' + t + '**' + post : piece;
+      } else out += piece;
+    }
+    L.text = trimPdf(out);
+  }
+  return { lines, wordGaps };
+}
+
+/* ── таблицы: зазоры → кандидаты → группы → кластеры колонок → сетка ── */
+function isRuleLine(L){
+  return L.parts.length <= 2 && /^[\s\-–—_=∙·•]{3,}$/.test(L.text);
+}
+function gridFromLines(group, bodyH, medGap){
+  const TOL = Math.max(bodyH * 0.9, medGap * 2.5);
+  const rowLines = group.filter(L => !isRuleLine(L));
+  const starts = [];
+  rowLines.forEach(L => L.parts.forEach(p => starts.push(p.x)));
+  if (!starts.length) return null;
+  starts.sort((a,b) => a - b);
+  const clusters = [];
+  for (const x of starts){
+    const last = clusters[clusters.length - 1];
+    if (last === undefined || x - last > TOL) clusters.push(x);
+  }
+  const rows = [];
+  for (const L of rowLines){
+    const cells = new Array(clusters.length).fill('');
+    const assigned = new Array(clusters.length).fill(false);
+    for (const p of L.parts){
+      let best = -1, bestD = Infinity;
+      for (let ci = 0; ci < clusters.length; ci++){
+        const d = Math.abs(p.x - clusters[ci]);
+        if (d < bestD){ bestD = d; best = ci; }
+      }
+      if (best === -1 || bestD > TOL * 1.6) continue;
+      const piece = trimPdf(p.str);
+      if (piece === '') continue;
+      cells[best] = assigned[best] ? cells[best] + ' ' + piece : piece;
+      assigned[best] = true;
+    }
+    rows.push(cells);
+  }
+  const dataRows = rows.filter(r => r.some(c => c !== ''));
+  if (dataRows.length < 2) return null;
+  let filledCols = 0;
+  for (let ci = 0; ci < clusters.length; ci++) if (dataRows.some(r => r[ci] !== '')) filledCols++;
+  if (filledCols < 2) return null;
+  /* двухколоночная вёрстка — не таблица: ровно 2 колонки и длинные «ячейки» */
+  if (clusters.length === 2 && dataRows.length >= 4){
+    const avg = dataRows.reduce((s, r) => s + r[0].length + r[1].length, 0) / (2 * dataRows.length);
+    if (avg > 90) return null;
+  }
+  if (dataRows.length > MAX_TABLE_ROWS)
+    return rowsToGfm(dataRows.slice(0, MAX_TABLE_ROWS)) + `\n\n<!-- показаны первые ${MAX_TABLE_ROWS} строк таблицы из ${dataRows.length} -->`;
+  return rowsToGfm(dataRows);
+}
+function detectPdfTables(lines, bodyH, medGap){
+  const BIG = Math.max(medGap * 2.6, bodyH * 0.95);
+  const cand = lines.map(L => {
+    if (L.parts.length < 2) return false;
+    let big = 0;
+    for (let i = 1; i < L.parts.length; i++){
+      const gap = L.parts[i].x - (L.parts[i-1].x + L.parts[i-1].w);
+      if (gap >= BIG) big++;
+    }
+    return big >= 1;
+  });
+  const tables = [];
+  let i = 0;
+  while (i < lines.length){
+    if (!cand[i]){ i++; continue; }
+    let j = i;
+    while (j + 1 < lines.length){
+      if (cand[j + 1]) j++;
+      else if (j + 2 < lines.length && isRuleLine(lines[j + 1]) && cand[j + 2]) j += 2; /* линия-разделитель шапки */
+      else break;
+    }
+    const md = gridFromLines(lines.slice(i, j + 1), bodyH, medGap);
+    if (md) tables.push({ start: i, end: j, md });
+    i = j + 1;
+  }
+  return tables;
+}
+
+/* ── заголовки: кегль + жирность + нумерация + «короткая отдельная строка» ── */
+function pdfHeadingLevel(L, med){
+  const t = L.text;
+  if (!t || t.length > 120) return 0;
+  if (/(?:[a-zа-яё)]|\d)[.!?]$/.test(t)) return 0; /* предложение, не заголовок */
+  const big = L.h >= med * 1.5;
+  const mid = L.h >= med * 1.22;
+  const numbered = /^\d+(?:\.\d+)*[.)]?\s+\S/.test(t) ||
+                   /^(?:§|гл\.?|глава|часть|раздел|приложение)\b/i.test(t);
+  if (big) return 1;
+  if (mid) return 2;
+  if (L.h >= med * 1.02 && L.bold && (numbered || t.length <= 70)) return 3;
+  return 0;
+}
+
+/* ── сборка страницы: таблицы → заголовки → абзацы (заголовок не мержится с телом) ── */
+function assemblePdfPage(lines, tables, med){
+  const tableByStart = new Map(tables.map(t => [t.start, t]));
+  const out = [];
+  let i = 0;
+  while (i < lines.length){
+    const tbl = tableByStart.get(i);
+    if (tbl){
+      out.push(tbl.md);
+      i = tbl.end + 1;
+      continue;
+    }
+    const L = lines[i];
+    const lvl = pdfHeadingLevel(L, med);
+    if (lvl){
+      out.push('#'.repeat(lvl) + ' ' + mdInline(L.text));
+      i++;
+      continue;
+    }
+    let para = L.text, prevY = L.baseY;
+    i++;
+    while (i < lines.length && !tableByStart.has(i)){
+      const N = lines[i];
+      if (pdfHeadingLevel(N, med)) break; /* заголовок — всегда отдельный блок */
+      const gap = prevY - N.baseY;
+      if (!(gap > 0 && gap <= med * 2)) break; /* межабзацный разрыв */
+      if (/[A-Za-zА-Яа-яЁё]-$/.test(para) && /^[a-zа-яё]/.test(N.text))
+        para = para.slice(0, -1) + N.text;     /* дефисный перенос, цифры не трогаем */
+      else para += ' ' + N.text;
+      prevY = N.baseY;
+      i++;
+    }
+    if (trimPdf(para) !== '') out.push(mdInline(para));
+  }
+  return out.join('\n\n');
+}
+
 async function pdfToMd(buf, opts){
   requireEngine('pdfjs', 'PDF');
   pdfjsLib.GlobalWorkerOptions.workerSrc =
@@ -668,72 +893,42 @@ async function pdfToMd(buf, opts){
     throw fail('Не удалось открыть PDF: файл повреждён или это не настоящий PDF.');
   }
   const total = pdf.numPages, count = Math.min(total, MAX_PDF_PAGES);
-  const pages = [], allHeights = [];
+  const pageLines = [];
+  const allH = [], allGaps = [];
 
+  /* проход 1: извлечение и сборка строк (disableNormalization — без NFKC/лигатурных подмен) */
   for (let p = 1; p <= count; p++){
     if (opts.isCancelled && opts.isCancelled()) throw fail('Конвертация отменена');
     if (opts.onProgress) opts.onProgress(`Страница ${p} из ${count}`);
     const page = await pdf.getPage(p);
-    const tc = await page.getTextContent();
-    const its = [];
+    const tc = await page.getTextContent({ disableNormalization: true });
+    const isBold = makeBoldLookup(page, tc.styles);
+    const items = [];
     for (const it of tc.items){
       if (typeof it.str !== 'string' || !it.str.length) continue;
-      its.push({ x: it.transform[4], y: it.transform[5], w: it.width || 0,
-                 h: it.height || Math.abs(it.transform[3]) || 10, str: it.str });
+      items.push({ x: it.transform[4], y: it.transform[5], w: it.width || 0,
+                   h: it.height || Math.abs(it.transform[3]) || 10,
+                   str: it.str, fontName: it.fontName });
     }
-    its.sort((a,b) => (b.y - a.y) || (a.x - b.x));
-    const lines = []; let cur = null;
-    for (const it of its){
-      const tol = Math.max(1.6, it.h * .45);
-      if (cur && Math.abs(cur.y - it.y) <= tol){ cur.parts.push(it); if (it.h > cur.h) cur.h = it.h; }
-      else { cur = { y: it.y, h: it.h, parts: [it] }; lines.push(cur); }
-    }
-    for (const L of lines){
-      L.parts.sort((a,b) => a.x - b.x);
-      let text = '', prev = null;
-      for (const pt of L.parts){
-        if (prev){
-          const gap = pt.x - (prev.x + prev.w);
-          if (gap > Math.max(1, pt.h * .18) && !/\s$/.test(text) && !/^\s/.test(pt.str)) text += ' ';
-        }
-        text += pt.str; prev = pt;
-      }
-      L.text = text.replace(/\s+/g, ' ').trim();
-      delete L.parts;
-      if (L.text) allHeights.push(L.h);
-    }
-    pages.push(lines);
+    const built = buildPdfLines(items, isBold);
+    built.lines.forEach(L => allH.push(L.h));
+    built.wordGaps.forEach(g => allGaps.push(g));
+    pageLines.push(built.lines);
     if (page.cleanup) page.cleanup();
     await yieldUI();
   }
-  if (!allHeights.length)
+  if (!allH.length)
     throw fail('В PDF нет текстового слоя — похоже, это скан. Здесь поможет только OCR.');
-  allHeights.sort((a,b) => a - b);
-  const med = allHeights[Math.floor(allHeights.length / 2)];
+  const med = medianOf(allH);
+  const medGap = allGaps.length ? medianOf(allGaps) : med * 0.25;
 
-  const pageTexts = pages.map((lines, pi) => {
-    const chunks = []; let prev = null;
-    for (const L of lines){
-      if (!L.text) continue;
-      const text = mdInline(L.text);
-      const head = L.h >= med * 1.55 ? 1 : (L.h >= med * 1.22 ? 2 : 0);
-      if (head){
-        chunks.push({ t:(head === 1 ? '# ' : '## ') + text, block:true });
-        prev = { y: L.y, block:true };
-      } else {
-        const cont = prev && !prev.block && prev.y != null &&
-                     (prev.y - L.y) > 0 && (prev.y - L.y) <= med * 2;
-        const last = chunks[chunks.length - 1];
-        if (cont && last && !last.block){
-          if (/[A-Za-zА-Яа-яЁё]-$/.test(last.t) && /^[a-zа-яё]/.test(text))
-            last.t = last.t.slice(0,-1) + text;
-          else last.t += ' ' + text;
-        } else chunks.push({ t: text, block:false });
-        prev = { y: L.y, block:false };
-      }
-    }
-    if (!chunks.length) return `<!-- на странице ${pi+1} нет текстового слоя -->`;
-    return chunks.map(c => c.t).join('\n\n');
+  /* проход 2: таблицы → блоки → страницы */
+  const pageTexts = pageLines.map((lines, pi) => {
+    if (!lines.some(L => L.text)) return `<!-- на странице ${pi + 1} нет текстового слоя -->`;
+    const tables = detectPdfTables(lines, med, medGap);
+    const md = assemblePdfPage(lines, tables, med);
+    lines.forEach(L => { L.parts = null; }); /* память: геометрия больше не нужна */
+    return md || `<!-- на странице ${pi + 1} нет текстового слоя -->`;
   });
 
   let md = pageTexts.join('\n\n---\n\n');
@@ -1463,7 +1658,6 @@ document.querySelector('.seg').addEventListener('keydown', e => {
  $('copyBtn').addEventListener('click', copyActive);
  $('dlBtn').addEventListener('click', downloadActiveFile);
 
-/* тумблеры */
  $('optImages').addEventListener('change', e => {
   state.opts.embedImages = e.target.checked;
   updateQueueChrome();
