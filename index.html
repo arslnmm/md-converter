@@ -291,7 +291,8 @@ footer .wrap{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;
   <noscript><section style="border:2px solid #B3361B;padding:20px;margin-bottom:24px"><h2>Требуется JavaScript</h2><p style="margin-top:8px">Конвертер работает полностью в браузере — включите JavaScript и обновите страницу.</p></section></noscript>
 
   <section class="hero">
-    <h1 class="hero-title">Конвертируйте свои файлы в <br>
+    <!-- пробел перед <br>: при скрытии переноса на мобильных слова не склеиваются -->
+    <h1 class="hero-title">Конвертируйте свои файлы <br>в
       <span class="u-word">Markdown<svg viewBox="0 0 200 14" preserveAspectRatio="none" aria-hidden="true" focusable="false"><path pathLength="1" d="M3 10 Q 100 1 197 8"/></svg></span>
     </h1>
     <p class="hero-sub">Word, Excel, PowerPoint, PDF, CSV, HTML, изображения, исходный код и обычный текст превращаются в чистую разметку <b>прямо в вашем браузере</b> — файлы нигде не сохраняются и никуда не отправляются.</p>
@@ -486,7 +487,7 @@ function toast(msg, type = 'ok'){
 function rowsToGfm(rows){
   if (!rows.length) return '';
   const norm = s => {
-    const t = String(s).replace(/^[ \t\u00a0]+|[ \t\u00a0]+$/g, ''); /* NBSP на краях сохраняется в PDF, тут только чистка краёв */
+    const t = String(s).replace(/^[ \t\u00a0]+|[ \t\u00a0]+$/g, '');
     if (t === '') return ' ';
     return t
       .replace(/\\/g, '\\\\')
@@ -647,17 +648,14 @@ async function sheetsToMd(wb, opts){
   return md + '\n';
 }
 
-/* ═══ PDF v2: layout-анализ, таблицы по координатам, sub/sup, bold, заголовки ═══
-   Lossless-контракт: disableNormalization (pdf.js не трогает лигатуры/кавычки),
-   NBSP не превращается в пробел (в JS \s включает \u00a0 — всюду осознанные trims),
-   экранируются только < > (плюс служебные символы таблиц). */
+/* ═══ PDF v2: layout-анализ, таблицы по координатам, sub/sup, bold, заголовки ═══ */
 
 function medianOf(arr){
   if (!arr.length) return 0;
   const s = arr.slice().sort((a,b) => a - b);
   return s[Math.floor(s.length / 2)];
 }
-/* NBSP-aware: срезаем только пробелы/табы, неразрывный пробел (сотни/десятичные) сохраняем */
+/* NBSP-aware: срезаем только пробелы/табы, неразрывный пробел сохраняем */
 const trimPdf = s => String(s).replace(/^[ \t]+|[ \t]+$/g, '');
 const hasWs = s => /[\u00a0 \t]$/.test(s);
 
@@ -686,8 +684,7 @@ function makeBoldLookup(page, styles){
 }
 
 /* сборка визуальных строк: суперскрипты (базовая линия поднята) и подстрочные
-   (опущена) попадают в ту же строку; допуск — от максимума высот, иначе
-   «²» с y выше основания рвал строку при сортировке по −Y */
+   (опущена) попадают в ту же строку; допуск — от максимума высот */
 function buildPdfLines(items, isBold){
   const sorted = items.slice().sort((a,b) => (b.y - a.y) || (a.x - b.x));
   const lines = [];
@@ -843,7 +840,7 @@ function pdfHeadingLevel(L, med){
   return 0;
 }
 
-/* ── сборка страницы: таблицы → заголовки → абзацы (заголовок не мержится с телом) ── */
+/* ── сборка страницы: таблицы → заголовки → абзацы ── */
 function assemblePdfPage(lines, tables, med){
   const tableByStart = new Map(tables.map(t => [t.start, t]));
   const out = [];
@@ -1445,10 +1442,14 @@ function renderViewer(){
     renderPreviewInto(p, f);
     body.appendChild(p); return;
   }
+  /* Режим «Разметка». Ранний выход — только если редактор этого файла
+     и он ЕДИНСТВЕННОЕ содержимое экрана (иначе на экране могли остаться
+     спиннер/ошибка/предпросмотр — это и был баг «значок крутится вечно»).
+     При любом другом содержимом экран очищается целиком. */
   const existing = body.querySelector('.v-src');
-  if (existing && existing.dataset.fileId === String(f.id)) return;
+  if (existing && existing.dataset.fileId === String(f.id) && body.children.length === 1) return;
   saveCursor(body);
-  if (existing) existing.remove();
+  body.textContent = '';
   const ta = document.createElement('textarea');
   ta.className = 'v-src';
   ta.dataset.fileId = f.id;
