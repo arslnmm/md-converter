@@ -236,14 +236,14 @@ footer .wrap{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;
   main.wrap{padding:28px 16px 16px}
   .site-head .wrap{flex-wrap:wrap;gap:6px 16px}
   .hero-title{font-size:clamp(30px,9vw,44px)}
-  .hero-title br{display:none}           /* заголовок переносится по словам, не вылезает */
+  .hero-title br{display:none}
   .dropzone{padding:34px 14px 24px}
   .drop-title{font-size:19px}
   .drop-formats{display:flex;flex-wrap:wrap;justify-content:center;gap:4px 10px;letter-spacing:0}
-  .drop-formats i{display:none}          /* строка форматов переносится, точки-разделители скрыты */
+  .drop-formats i{display:none}
   .drop-privacy{max-width:100%}
   .queue-list{max-height:200px}
-  .v-src{font-size:16px;padding:16px}    /* 16px — iOS не зумит при фокусе */
+  .v-src{font-size:16px;padding:16px}
   .prose{font-size:15.5px;padding:20px}
   .v-stats{font-size:10px}
   .viewer-bar{gap:10px;padding:10px 12px}
@@ -253,7 +253,7 @@ footer .wrap{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;
   .mini-btn{padding:8px 9px}
 }
 @media (pointer:coarse){
-  .drop-alt{display:none}                /* на тач-устройствах подсказка Ctrl+V не нужна */
+  .drop-alt{display:none}
   .v-src{font-size:16px}
 }
 @media (prefers-reduced-motion:reduce){
@@ -319,6 +319,7 @@ footer .wrap{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;
     <span class="opt-label">Параметры</span>
     <label class="switch"><input type="checkbox" id="optImages" checked><span class="sw"></span>встраивать изображения (base64)</label>
     <label class="switch"><input type="checkbox" id="optGfm" checked><span class="sw"></span>таблицы GitHub (GFM)</label>
+    <label class="switch"><input type="checkbox" id="optExact" checked><span class="sw"></span>точные числа (все знаки после запятой)</label>
     <button class="mini-btn" id="reconvertBtn" hidden type="button"><svg class="ic" aria-hidden="true" focusable="false"><use href="#i-retry"/></svg>переконвертировать всё</button>
   </section>
 
@@ -370,7 +371,7 @@ const escHtml = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replac
   .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 const fail = msg => { const e = new Error(msg); e.friendly = true; return e; };
 const pad2 = n => String(n).padStart(2, '0');
-const yieldUI = () => new Promise(r => setTimeout(r, 0)); /* точка уступки: страница дышит между листами/страницами/слайдами */
+const yieldUI = () => new Promise(r => setTimeout(r, 0));
 
 const MAX_FILE_BYTES   = 100 * 1048576; /* sync: текст «лимит — 100 МБ» в HTML */
 const MAX_TABLE_ROWS   = 1500;
@@ -383,8 +384,8 @@ const SNIFF_BYTES      = 4096;
 const MAX_ZIP_ENTRIES  = 2000;
 const MAX_ZIP_FILE     = 32 * 1048576;
 const MAX_ZIP_TOTAL    = 256 * 1048576;
-const QUEUE_MAX        = 2;        /* одновременно конвертируются не больше двух файлов */
-const WATCHDOG_MS      = 180000;   /* страховка: зависшая конвертация честно помечается ошибкой через 3 минуты */
+const QUEUE_MAX        = 2;
+const WATCHDOG_MS      = 180000;
 
 const NS_REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
 const NS_A   = 'http://schemas.openxmlformats.org/drawingml/2006/main';
@@ -396,7 +397,7 @@ function requireEngine(key, human){
     throw fail('Движок ' + human + ' не загрузился — проверьте доступ к CDN и обновите страницу.');
 }
 
-/* декодирование: UTF-16 по BOM, иначе строгий UTF-8, при сбое — cp1251 (Блокнот, 1С) */
+/* декодирование: UTF-16 по BOM, иначе строгий UTF-8, при сбое — cp1251 */
 function decodeText(buf){
   const u8 = new Uint8Array(buf);
   if (u8[0] === 0xFF && u8[1] === 0xFE) return new TextDecoder('utf-16le').decode(buf);
@@ -469,7 +470,6 @@ function downloadBlob(name, blob){
 }
 const downloadText = (name, text) => downloadBlob(name, new Blob([text], {type:'text/markdown;charset=utf-8'}));
 
-/* тосты */
 function toast(msg, type = 'ok'){
   const icons = {ok:'i-check', err:'i-x', info:'i-info'};
   const el = document.createElement('div');
@@ -517,6 +517,71 @@ const mdInline = s => String(s)
   .replace(/</g, '&lt;')
   .replace(/>/g, '&gt;');
 
+/* ═══════════════════════ точные числа (Excel/CSV) ═══════════════════════ */
+/* Excel хранит максимум 15 значащих цифр — больше в файле физически нет.
+   toPrecision(15) заодно убирает float-шум (0.1+0.2 → 0.3, а не 0.30000000000000004). */
+function preciseNumber(v){
+  if (!Number.isFinite(v)) return String(v);
+  return String(parseFloat(v.toPrecision(15)));
+}
+/* число из отображаемого текста: пробелы-разделители, запятая ИЛИ точка как десятичный знак */
+function parseDisplay(s){
+  let t = String(s).replace(/[\s\u00a0\u202f]/g, '');
+  const lastComma = t.lastIndexOf(',');
+  const lastDot = t.lastIndexOf('.');
+  if (lastComma > lastDot) t = t.replace(/\./g, '').replace(',', '.');
+  else t = t.replace(/,/g, '');
+  return Number(t);
+}
+/* отображение честно передаёт значение? («2,50» при 2.5 — да; «3,14» при 3.141593 — нет) */
+function sameNumber(displayText, v){
+  const n = parseDisplay(displayText);
+  return Number.isFinite(n) && n === v;
+}
+function fmtIsDate(z){
+  try { return !!(z && XLSX.SSF && XLSX.SSF.is_date && XLSX.SSF.is_date(z)); }
+  catch(e){ return false; }
+}
+/* значение ячейки: даты — как даты; числа — без потерь точности */
+function cellText(cell){
+  if (!cell) return '';
+  switch (cell.t){
+    case 'n':
+      if (fmtIsDate(cell.z)) return cell.w != null ? cell.w : preciseNumber(cell.v);
+      if (cell.w != null && sameNumber(cell.w, cell.v)) return cell.w; /* показ без потерь — оставляем как в Excel */
+      return preciseNumber(cell.v);                                      /* формат срезал цифры — отдаём всё число */
+    case 'b': return cell.w != null ? cell.w : (cell.v ? 'TRUE' : 'FALSE');
+    case 'e': return cell.w != null ? cell.w : String(cell.v);
+    case 's': case 'str': return cell.v != null ? String(cell.v) : '';
+    default:  return cell.w != null ? cell.w : (cell.v != null ? String(cell.v) : '');
+  }
+}
+/* обход реальных ячеек листа (без материлизации пустых строк — бережём память) */
+function sheetToRowsExact(ws){
+  if (!ws || !ws['!ref']) return [];
+  const range = XLSX.utils.decode_range(ws['!ref']);
+  const rowMap = new Map();
+  let maxC = range.s.c;
+  for (const key of Object.keys(ws)){
+    if (key.charCodeAt(0) === 33) continue; /* '!' — служебные поля листа */
+    let addr;
+    try { addr = XLSX.utils.decode_cell(key); } catch(e){ continue; }
+    if (!rowMap.has(addr.r)) rowMap.set(addr.r, new Map());
+    rowMap.get(addr.r).set(addr.c, cellText(ws[key]));
+    if (addr.c > maxC) maxC = addr.c;
+  }
+  if (!rowMap.size) return [];
+  const rows = [];
+  const rowIdxs = Array.from(rowMap.keys()).sort((a,b) => a - b);
+  for (const r of rowIdxs){
+    const cells = rowMap.get(r);
+    const row = [];
+    for (let c = range.s.c; c <= maxC; c++) row.push(cells.has(c) ? cells.get(c) : '');
+    rows.push(row);
+  }
+  return rows;
+}
+
 /* ═══════════════════════ turndown: HTML → Markdown ═══════════════════════ */
 function tableNodeToMarkdown(table, gfm){
   const trs = Array.from(table.querySelectorAll('tr')).filter(tr => tr.closest('table') === table);
@@ -554,7 +619,6 @@ function makeTurndown(gfm){
 
 /* ═══════════════════════ конвертеры ═══════════════════════ */
 
-/* Word (.docx) */
 async function docxToMd(buf, opts){
   requireEngine('mammoth', 'Word');
   let html;
@@ -564,7 +628,7 @@ async function docxToMd(buf, opts){
   return tidy(makeTurndown(opts.gfm).turndown(html));
 }
 
-/* Excel / CSV — теперь async: уступка и живой прогресс перед каждым листом */
+/* Excel / CSV: точные числа (по умолчанию) или «как отображается в Excel» */
 async function sheetsToMd(wb, opts){
   const names = wb.SheetNames.slice(0, MAX_SHEETS);
   const multi = names.length > 1;
@@ -574,7 +638,9 @@ async function sheetsToMd(wb, opts){
     if (opts.isCancelled && opts.isCancelled()) throw fail('Конвертация отменена');
     if (opts.onProgress) opts.onProgress(`Лист ${i + 1} из ${names.length}`);
     await yieldUI();
-    const rows = XLSX.utils.sheet_to_json(wb.Sheets[name], { header:1, raw:false, defval:'' });
+    const rows = opts.exactNumbers
+      ? sheetToRowsExact(wb.Sheets[name])
+      : XLSX.utils.sheet_to_json(wb.Sheets[name], { header:1, raw:false, defval:'' });
     while (rows.length && rows[rows.length-1].every(c => String(c).trim() === '')) rows.pop();
     while (rows.length && rows[0].every(c => String(c).trim() === '')) rows.shift();
     if (!rows.length){ if (multi) parts.push(`## ${mdInline(name)}\n\n<!-- пустой лист -->`); continue; }
@@ -589,7 +655,6 @@ async function sheetsToMd(wb, opts){
   return md + '\n';
 }
 
-/* PDF: постраничный прогресс, отмена, page.cleanup(), без хранения parts */
 async function pdfToMd(buf, opts){
   requireEngine('pdfjs', 'PDF');
   pdfjsLib.GlobalWorkerOptions.workerSrc =
@@ -676,7 +741,6 @@ async function pdfToMd(buf, opts){
   return md + '\n';
 }
 
-/* PowerPoint: заметки докладчика через .rels (включая абсолютные Target) */
 async function pptxNotesText(zip, dp, readXml, slidePath){
   try{
     const relPath = slidePath.replace(/^ppt\/slides\//, 'ppt/slides/_rels/') + '.rels';
@@ -710,7 +774,6 @@ async function pptxNotesText(zip, dp, readXml, slidePath){
   } catch(e){ return ''; }
 }
 
-/* PowerPoint (.pptx): послайдовый прогресс + защита от zip-бомб */
 async function pptxToMd(buf, opts){
   requireEngine('jszip', 'JSZip');
   let zip;
@@ -805,7 +868,6 @@ async function pptxToMd(buf, opts){
   return md + '\n';
 }
 
-/* HTML-файл → markdown */
 function htmlToMd(buf, opts){
   const doc = new DOMParser().parseFromString(decodeText(buf), 'text/html');
   doc.querySelectorAll('script,style,noscript').forEach(n => n.remove());
@@ -816,7 +878,6 @@ function htmlToMd(buf, opts){
   return tidy(md);
 }
 
-/* изображения */
 function imageToMd(file, opts){
   return new Promise((resolve, reject) => {
     const alt = (file.name || 'image')
@@ -835,7 +896,6 @@ function imageToMd(file, opts){
   });
 }
 
-/* код → fenced-блок */
 function codeFence(text, lang){
   if (text.length > MAX_TEXT_CHARS) throw fail('Файл слишком большой для текстового режима (лимит 1,5 МБ).');
   const runs = text.match(/`+/g) || [];
@@ -855,7 +915,6 @@ const CODE_LANGS = {
 };
 const IMAGE_EXT = ['png','jpg','jpeg','gif','webp','bmp','svg','ico','avif','heic'];
 
-/* маршрутизатор */
 async function convertBuffer(file, opts){
   if (opts.isCancelled && opts.isCancelled()) throw fail('Конвертация отменена');
   const { ext } = splitExt(file.name);
@@ -898,7 +957,7 @@ async function convertBuffer(file, opts){
 /* ═══════════════════════ состояние, очередь, интерфейс ═══════════════════════ */
 const state = {
   files: [], activeId: null, view: 'source', pinned: false, seq: 0,
-  opts: { embedImages: true, gfm: true }
+  opts: { embedImages: true, gfm: true, exactNumbers: true }
 };
 const queue = { pending: [], running: 0, MAX: QUEUE_MAX };
 const activeFile = () => state.files.find(f => f.id === state.activeId) || null;
@@ -908,12 +967,13 @@ function makeOpts(entry){
   return {
     embedImages: state.opts.embedImages,
     gfm: state.opts.gfm,
+    exactNumbers: state.opts.exactNumbers,
     isCancelled: () => entry.cancelled === true,
     onProgress: msg => {
       entry.progress = msg;
       if (state.activeId === entry.id){
         const el = document.getElementById('workMsg');
-        if (el) el.textContent = msg;   /* живой прогресс без перерисовки всего экрана */
+        if (el) el.textContent = msg;
       }
     }
   };
@@ -942,7 +1002,6 @@ function handleFiles(fileList){
     state.files.push(entry); fresh.push(entry);
   }
   if (!fresh.length) return;
-  /* фикс: фокус всегда на первом новом файле — просмотрщик не залипает на старом */
   state.pinned = false;
   state.activeId = fresh[0].id;
   updateUI();
@@ -951,7 +1010,6 @@ function handleFiles(fileList){
 }
 
 async function processEntry(entry){
-  /* watchdog: если конвертация зависла — через 3 минуты честная ошибка вместо вечного спиннера */
   const timeoutP = new Promise((_, reject) => {
     entry._wdT = setTimeout(() => {
       entry.cancelled = true;
@@ -970,8 +1028,7 @@ async function processEntry(entry){
     queue.running--;
     pump();
   }
-  if (!state.files.includes(entry)) return;   /* файл удалили/очистили, пока шла конвертация */
-  /* фикс: точечное обновление строки очереди вместо полной пересборки (стресс 20+ файлов) */
+  if (!state.files.includes(entry)) return;
   refreshRow(entry);
   updateQueueChrome();
   const act = activeFile();
@@ -1012,7 +1069,7 @@ function retryEntry(id){
   updateUI();
 }
 
-/* ── очередь: полная пересборка только при добавлении/удалении ── */
+/* ── очередь ── */
 const STATUS_NAMES = { working: 'Обрабатывается', done: 'Готово', error: 'Ошибка' };
 function buildRow(f){
   const row = document.createElement('div');
@@ -1115,7 +1172,6 @@ function updateStats(){
   const lines = md.split('\n').length;
   el.textContent = `${md.length.toLocaleString('ru-RU')} симв · ${words.toLocaleString('ru-RU')} слов · ${lines.toLocaleString('ru-RU')} стрк`;
 }
-/* fail-closed предпросмотр + кэш (правки меняют md → кэш сбрасывается сам) */
 function renderPreviewInto(root, f){
   if (!window.DOMPurify){
     root.textContent = 'Предпросмотр недоступен: не загрузился санитайзер (DOMPurify). Проверьте сеть или используйте режим «Разметка».';
@@ -1129,7 +1185,6 @@ function renderPreviewInto(root, f){
     f._pv = { md: f.md, html };
   }
   root.innerHTML = f._pv.html;
-  /* локальность: никаких исходящих запросов из предпросмотра */
   root.querySelectorAll('img,source,audio,video,track').forEach(el => {
     const s = (el.getAttribute('src') || el.getAttribute('srcset') || '').trim();
     if (s && !/^(data:|blob:)/i.test(s)) el.remove();
@@ -1173,7 +1228,6 @@ function renderViewer(){
     saveCursor(body); body.textContent = '';
     const s = document.createElement('div');
     s.className = 'v-state';
-    /* честный статус: реально конвертируется или ждёт своей очереди; прогресс обновляется на лету */
     const msg = f.started
       ? (f.progress || 'Конвертирую «' + f.file.name + '»…')
       : '«' + f.file.name + '» ждёт в очереди — начну после текущих файлов';
@@ -1196,7 +1250,6 @@ function renderViewer(){
     renderPreviewInto(p, f);
     body.appendChild(p); return;
   }
-  /* редактор того же файла не пересоздаём — курсор и Ctrl+Z живут */
   const existing = body.querySelector('.v-src');
   if (existing && existing.dataset.fileId === String(f.id)) return;
   saveCursor(body);
@@ -1298,7 +1351,6 @@ fileInputEl.addEventListener('change', () => {
   fileInputEl.value = '';
 });
 
-/* drag & drop: перехватываем только ФАЙЛЫ — перенос текста в редактор работает */
 let dragDepth = 0;
 const dtHasFiles = e => e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files');
 function setDragging(on){
@@ -1314,7 +1366,6 @@ window.addEventListener('drop', e => {
   if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files);
 });
 
-/* вставка из буфера */
 function normalizeClipboardFile(f){
   if (f.name && f.name.includes('.')) return f;
   const d = new Date();
@@ -1357,7 +1408,6 @@ window.addEventListener('paste', e => {
   }
 });
 
-/* очередь: делегированный клик */
  $('queueList').addEventListener('click', e => {
   const del = e.target.closest('[data-del]');
   if (del){ deleteEntry(Number(del.dataset.del)); return; }
@@ -1377,7 +1427,6 @@ window.addEventListener('paste', e => {
 });
  $('zipAllBtn').addEventListener('click', zipAll);
 
-/* очистка в два шага */
 let clearArmed = false, clearTimer = null;
 function resetClearArm(){
   clearArmed = false;
@@ -1399,7 +1448,6 @@ function resetClearArm(){
   }
 });
 
-/* вкладки */
 document.querySelectorAll('.seg-btn').forEach(b => b.addEventListener('click', () => {
   state.view = b.dataset.view;
   renderViewer();
@@ -1426,6 +1474,11 @@ document.querySelector('.seg').addEventListener('keydown', e => {
   updateQueueChrome();
   toast('Таблицы: ' + (e.target.checked ? 'GitHub (GFM)' : 'HTML-блоки') + ' — применюсь к новым файлам', 'info');
 });
+ $('optExact').addEventListener('change', e => {
+  state.opts.exactNumbers = e.target.checked;
+  updateQueueChrome();
+  toast('Числа: ' + (e.target.checked ? 'полная точность' : 'как отображается в Excel') + ' — применюсь к новым файлам', 'info');
+});
  $('reconvertBtn').addEventListener('click', () => {
   state.files.filter(f => f.status === 'done' || f.status === 'error').forEach(f => {
     f.status = 'working'; f.error = null; f.md = '';
@@ -1439,7 +1492,6 @@ document.querySelector('.seg').addEventListener('keydown', e => {
   toast('Переконвертирую с новыми параметрами', 'info');
 });
 
-/* Ctrl/Cmd+S — работает в любой раскладке */
 window.addEventListener('keydown', e => {
   if ((e.ctrlKey || e.metaKey) && e.code === 'KeyS'){
     e.preventDefault();
@@ -1447,12 +1499,10 @@ window.addEventListener('keydown', e => {
   }
 });
 
-/* подсказка Cmd+V на macOS */
 if (/Mac|iPhone|iPad/.test(navigator.platform || '') || /Macintosh/.test(navigator.userAgent)){
   $('pasteHint').innerHTML = '…или вставьте из буфера — <kbd>Cmd</kbd>+<kbd>V</kbd> (файлы, скриншоты, текст)';
 }
 
-/* диагностика движков после загрузки всех deferred-скриптов */
 window.addEventListener('load', () => {
   const need = [['mammoth','Word'],['XLSX','Excel/CSV'],['pdfjsLib','PDF'],
                 ['TurndownService','HTML'],['marked','Предпросмотр'],
