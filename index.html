@@ -178,6 +178,11 @@ body.dragging .dropzone .drop-glyph{stroke:var(--accent)}
 .viewer-body{position:relative;min-height:460px}
 .v-src{display:block;width:100%;min-height:440px;height:62vh;max-height:840px;border:0;outline:none;resize:vertical;
   padding:22px 26px;font:400 13.5px/1.75 var(--mono);color:var(--ink);background:var(--panel);tab-size:2}
+/* только для чтения: разметка >5 МБ — редактор такое не тянет */
+.v-src-ro{min-height:440px;padding:16px 20px}
+.ro-note{font:500 12px var(--mono);color:var(--accent-deep);background:var(--accent-soft);padding:10px 14px;margin-bottom:14px}
+.ro-text{font:400 13.5px/1.75 var(--mono);white-space:pre-wrap;overflow-wrap:anywhere;max-height:56vh;overflow:auto;
+  background:#fff;border:1px solid var(--line);padding:14px 16px}
 .v-state{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;min-height:460px;padding:60px 24px;text-align:center}
 .v-state .big-ic{width:30px;height:30px;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
 .v-state h3{font:600 18px var(--sans)}
@@ -298,7 +303,7 @@ footer .wrap{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;
     <p class="hero-sub">Word, Excel, PowerPoint, PDF, CSV, HTML, изображения, исходный код и обычный текст превращаются в чистую разметку <b>прямо в вашем браузере</b> — файлы нигде не сохраняются и никуда не отправляются.</p>
   </section>
 
-  <section class="dropzone" id="dropzone" role="button" tabindex="0" aria-label="Зона загрузки файлов: перетащите, выберите или вставьте из буфера">
+  <section class="dropzone" id="dropzone" tabindex="0" aria-label="Зона загрузки файлов: перетащите, выберите или вставьте из буфера">
     <span class="crop tl"></span><span class="crop tr"></span><span class="crop bl"></span><span class="crop br"></span>
     <div class="drop-inner">
       <svg class="drop-glyph" viewBox="0 0 48 48" aria-hidden="true" focusable="false"><circle cx="24" cy="24" r="20"/><path class="glyph-arrow" d="M24 15v15m0 0-6.5-6.5M24 30l6.5-6.5"/></svg>
@@ -318,7 +323,7 @@ footer .wrap{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;
 
   <section class="options">
     <span class="opt-label">Параметры</span>
-    <label class="switch"><input type="checkbox" id="optImages" checked><span class="sw"></span>встраивать изображения (base64)</label>
+    <label class="switch"><input type="checkbox" id="optImages" checked><span class="sw"></span>встраивать изображения в .md (base64)</label>
     <label class="switch"><input type="checkbox" id="optGfm" checked><span class="sw"></span>таблицы GitHub (GFM)</label>
     <label class="switch"><input type="checkbox" id="optExact" checked><span class="sw"></span>точные числа (все знаки после запятой)</label>
     <button class="mini-btn" id="reconvertBtn" hidden type="button"><svg class="ic" aria-hidden="true" focusable="false"><use href="#i-retry"/></svg>переконвертировать всё</button>
@@ -381,13 +386,16 @@ const MAX_PDF_PAGES    = 300;
 const MAX_SLIDES       = 500;
 const MAX_TEXT_CHARS   = 1500000;
 const MAX_IMG_EMBED    = 5 * 1048576;
+const DOCX_IMG_TOTAL   = 32 * 1048576;
+const MAX_PREVIEW_CHARS= 2 * 1048576;
+const EDITOR_MAX_CHARS = 5 * 1048576;
 const SNIFF_BYTES      = 4096;
 const MAX_ZIP_ENTRIES  = 2000;
 const MAX_ZIP_FILE     = 32 * 1048576;
 const MAX_ZIP_TOTAL    = 256 * 1048576;
 const QUEUE_MAX        = 2;
 const WATCHDOG_MS      = 180000;
-const MAX_PDF_COLS     = 24;   /* больше — сетка явно распознана неверно */
+const MAX_PDF_COLS     = 24;
 
 const NS_REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
 const NS_A   = 'http://schemas.openxmlformats.org/drawingml/2006/main';
@@ -412,11 +420,25 @@ function decodeText(buf){
   }
   return text;
 }
+function decodeHtmlText(buf){
+  try {
+    const head = new TextDecoder('windows-1252').decode(buf.slice(0, 4096)).toLowerCase();
+    const m = head.match(/charset\s*=\s*["']?\s*([a-z0-9_-]+)/);
+    const enc = m ? m[1] : '';
+    if (enc && enc !== 'utf-8' && enc !== 'utf8' && enc !== 'ascii' && enc !== 'us-ascii'){
+      try { return new TextDecoder(enc).decode(buf); }
+      catch(e){ /* неизвестная браузеру кодировка — общий путь ниже */ }
+    }
+  } catch(e){}
+  return decodeText(buf);
+}
 function splitExt(name){
   const dot = name.lastIndexOf('.');
   if (dot === -1) return { ext: '', base: name };
   if (dot === 0)  return { ext: name.slice(1).toLowerCase(), base: '' };
-  return { ext: name.slice(dot + 1).toLowerCase(), base: name.slice(0, dot) };
+  const ext = name.slice(dot + 1).toLowerCase();
+  if (/^\d{1,4}$/.test(ext)) return { ext: '', base: name };
+  return { ext, base: name.slice(0, dot) };
 }
 function formatBytes(b){
   if (b < 1024) return b + ' Б';
@@ -441,13 +463,12 @@ function tidy(md){
       continue;
     }
     if (inFence){ out.push(line); continue; }
-    const cleaned = line.replace(/\u00a0/g, ' ');
-    if (cleaned.trim() === ''){
+    if (line.trim() === ''){
       blanks++;
       if (blanks <= 1) out.push('');
     } else {
       blanks = 0;
-      out.push(cleaned);
+      out.push(line);
     }
   }
   while (out.length && out[0].trim() === '') out.shift();
@@ -483,16 +504,13 @@ function toast(msg, type = 'ok'){
   el.querySelector('.toast-x').addEventListener('click', () => { clearTimeout(timer); el.remove(); });
 }
 
-/* ═══════════════════════ умное экранирование (фикс «агента экранирования») ═══════════════════════
-   Markdown считает < опасным только перед буквой/!/ ?/ / (начало HTML-тега):
-   <= и a < b остаются литералами, <img — экранируется. */
 const isHtmlStart = (full, off) => /[A-Za-z!/?]/.test(full[off + 1] || '');
 const smartLt = s => String(s).replace(/</g, (m, off, full) => isHtmlStart(full, off) ? '&lt;' : '<');
 
 /* ═══════════════════════ таблицы ═══════════════════════ */
-function rowsToGfm(rows){
+function rowsToGfm(rows, preMd){
   if (!rows.length) return '';
-  const norm = s => {
+  const normPlain = s => {
     const t = String(s).replace(/^[ \t\u00a0]+|[ \t\u00a0]+$/g, '');
     if (t === '') return ' ';
     return smartLt(t)
@@ -501,6 +519,14 @@ function rowsToGfm(rows){
       .replace(/`/g, '\\`')
       .replace(/\r?\n/g, '<br>');
   };
+  const normPre = s => {
+    const t = String(s).replace(/^[ \t\u00a0]+|[ \t\u00a0]+$/g, '');
+    if (t === '') return ' ';
+    return smartLt(t)
+      .replace(/\|/g, '\\|')
+      .replace(/\r?\n/g, '<br>');
+  };
+  const norm = preMd ? normPre : normPlain;
   const width = Math.max(1, ...rows.map(r => r.length));
   const pad = cells => {
     const c = cells.slice();
@@ -516,8 +542,6 @@ function rowsToHtml(rows){
   rows.slice(1).forEach(r => { h += '    <tr>' + r.map(c => '<td>' + escHtml(c) + '</td>').join('') + '</tr>\n'; });
   return h + '  </tbody>\n</table>';
 }
-/* inline-текст (абзацы PDF/PPTX, имена листов): < — умно, > — только в начале строки,
-   иначе Markdown превратил бы его в цитату */
 const mdInline = s => smartLt(String(s).replace(/[\x00-\x1f\x7f]+/g, ' '))
   .replace(/^([ \t]{0,3})>/, '$1&gt;');
 
@@ -547,8 +571,14 @@ function cellText(cell){
   switch (cell.t){
     case 'n':
       if (fmtIsDate(cell.z)) return cell.w != null ? cell.w : preciseNumber(cell.v);
+      if (cell.z && !cell.z.includes('"') && cell.z.indexOf('%') !== -1)
+        return preciseNumber(cell.v * 100) + '%';
       if (cell.w != null && sameNumber(cell.w, cell.v)) return cell.w;
       return preciseNumber(cell.v);
+    case 'd':
+      if (cell.w != null) return cell.w;
+      if (cell.v instanceof Date) return cell.v.toISOString().slice(0, 10);
+      return String(cell.v != null ? cell.v : '');
     case 'b': return cell.w != null ? cell.w : (cell.v ? 'TRUE' : 'FALSE');
     case 'e': return cell.w != null ? cell.w : String(cell.v);
     case 's': case 'str': return cell.v != null ? String(cell.v) : '';
@@ -597,8 +627,26 @@ function tableNodeToMarkdown(table, gfm){
     }
     return '\n\n' + html + '\n\n';
   }
-  const rows = trs.map(tr => Array.from(tr.children).map(c => c.textContent));
-  return '\n\n' + rowsToGfm(rows) + '\n\n';
+  const cellTd = new TurndownService({
+    headingStyle:'atx', hr:'---', bulletListMarker:'-',
+    codeBlockStyle:'fenced', emDelimiter:'*', strongDelimiter:'**', linkStyle:'inlined'
+  });
+  const rows = [];
+  for (const tr of trs){
+    const cells = [];
+    for (const c of Array.from(tr.children)){
+      if (c.nodeName === 'TABLE'){ cells.push(c.textContent); continue; }
+      let md;
+      try {
+        const clone = c.cloneNode(true);
+        clone.querySelectorAll('table').forEach(t => t.replaceWith(document.createTextNode(' ' + t.textContent + ' ')));
+        md = cellTd.turndown(clone.innerHTML);
+      } catch(e){ md = c.textContent; }
+      cells.push(String(md || '').trim());
+    }
+    rows.push(cells);
+  }
+  return '\n\n' + rowsToGfm(rows, true) + '\n\n';
 }
 function makeTurndown(gfm){
   requireEngine('turndown', 'HTML');
@@ -615,15 +663,136 @@ function makeTurndown(gfm){
   return td;
 }
 
+/* ═══════════════════════ байты (для сопоставления изображений docx) ═══════════════════════ */
+function b64ToBytes(b64){
+  const bin = atob(b64);
+  const u8 = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+  return u8;
+}
+function bytesEqual(a, b){
+  if (!a || !b || a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+}
+
 /* ═══════════════════════ конвертеры ═══════════════════════ */
 
 async function docxToMd(buf, opts){
   requireEngine('mammoth', 'Word');
-  let html;
-  try { html = (await mammoth.convertToHtml({ arrayBuffer: buf })).value; }
-  catch(e){ throw fail('Не удалось прочитать .docx: файл повреждён или это старый формат — пересохраните как .docx.'); }
-  if (!opts.embedImages) html = html.replace(/<img[^>]*>/g, '');
-  return tidy(makeTurndown(opts.gfm).turndown(html));
+  const styleMap = [
+    "p[style-name='Title'] => h1:fresh",
+    "p[style-name='Subtitle'] => h2:fresh",
+    "p[style-name='Quote'] => blockquote:fresh",
+    "p[style-name='Intense Quote'] => blockquote:fresh"
+  ];
+
+  /* 1. Препроцессинг: mammoth молча выбрасывает w:br (перенос строки) и w:tab —
+     из-за этого склеивались номера страниц в оглавлении и абзацы в ячейках таблиц.
+     Вставляем sentinel-символы прямо в document.xml, переупаковываем docx. */
+  let work = buf, media = [];
+  if (typeof JSZip !== 'undefined'){
+    try {
+      const zip = await JSZip.loadAsync(buf);
+      const docFile = zip.file('word/document.xml');
+      if (docFile){
+        let xml = await docFile.async('string');
+        xml = xml.replace(/<w:br\s*\/>/g, '<w:t xml:space="preserve">\uE000</w:t>')
+                 .replace(/<w:tab\s*\/>/g, '<w:t xml:space="preserve">\uE001</w:t>');
+        zip.file('word/document.xml', xml);
+        work = await zip.generateAsync({ type: 'arraybuffer', compression: 'STORE' });
+      }
+      /* медиа docx: оригинальные байты и имена файлов */
+      for (const p of Object.keys(zip.files)){
+        if (/^word\/media\/[^/]+$/.test(p))
+          media.push({ path: 'media/' + p.replace(/^word\/media\//, ''), bytes: await zip.file(p).async('uint8array') });
+      }
+    } catch(e){ /* препроцессинг не удался — конвертируем как есть */ }
+  }
+
+  let html = null;
+  for (const convOpts of [{ styleMap }, {}]){
+    try { html = (await mammoth.convertToHtml({ arrayBuffer: work }, convOpts)).value; break; }
+    catch(e){ /* пробуем без styleMap */ }
+  }
+  if (html === null)
+    throw fail('Не удалось прочитать .docx: файл повреждён, защищён паролем или это старый формат — пересохраните как .docx.');
+
+  /* 2. sentinel → <br>/пробел (фикс пунктов 2 и 5 из аудита КИМИ) */
+  html = html.replace(/\uE000/g, '<br>').replace(/\uE001/g, ' ');
+
+  /* 3. изображения.
+     base64-режим: лимиты как раньше.
+     файловый режим: data-URI → media/путь (сопоставление по байтам),
+     невостребованные (плавающие, которых mammoth не видит) — в конец с пометкой. */
+  let dropped = 0;
+  const usedPaths = new Set();
+  if (opts.embedImages){
+    const CAP = Math.ceil(MAX_IMG_EMBED * 1.4);
+    let used = 0;
+    html = html.replace(/<img\b[^>]*>/gi, tag => {
+      const m = tag.match(/src="data:[^"]*"/i);
+      const len = m ? m[0].length : 0;
+      if (!len) return tag;
+      if (len > CAP || used + len > DOCX_IMG_TOTAL){ dropped++; return ''; }
+      used += len;
+      return tag;
+    });
+  } else if (media.length){
+    html = html.replace(/<img\b[^>]*>/gi, tag => {
+      const m = tag.match(/src="data:([^;]+);base64,([^"]*)"/i);
+      if (!m) return tag;
+      const bytes = b64ToBytes(m[2]);
+      const hit = media.find(f => !usedPaths.has(f.path) && bytesEqual(f.bytes, bytes))
+               || media.find(f => bytesEqual(f.bytes, bytes));
+      if (!hit) return tag;
+      usedPaths.add(hit.path);
+      const alt = ((tag.match(/alt="([^"]*)"/i) || [])[1] || '').replace(/"/g, '&quot;');
+      return `<img src="${hit.path}" alt="${alt}">`;
+    });
+    if (opts.attachMedia) opts.attachMedia(media);
+  }
+
+  /* 4. Чистка DOM: пустые li-обёртки (источник артефактов «- - -») и полностью
+     жирные короткие абзацы → ### (главы, размеченные жирным вручную, без Heading) */
+  try {
+    const dom = new DOMParser().parseFromString(html, 'text/html');
+    dom.querySelectorAll('li').forEach(li => {
+      if (li.textContent.trim() !== '' || li.querySelector('img')) return;
+      const lists = Array.from(li.children).filter(c => c.nodeName === 'UL' || c.nodeName === 'OL');
+      if (lists.length){ lists.forEach(l => li.parentNode.insertBefore(l, li)); li.remove(); }
+      else if (!li.children.length) li.remove();
+    });
+    dom.querySelectorAll('p').forEach(p => {
+      if (p.closest('td,th,li')) return;
+      const t = p.textContent.trim();
+      if (!t || t.length > 80 || /[.!?…]$/.test(t)) return;
+      const clone = p.cloneNode(true);
+      clone.querySelectorAll('strong,b').forEach(el => el.remove());
+      if (clone.textContent.trim() === '' && p.querySelector('strong,b')){
+        const h = dom.createElement('h3');
+        h.textContent = t;
+        p.replaceWith(h);
+      }
+    });
+    html = dom.body.innerHTML;
+  } catch(e){ /* чистка не удалась — как есть */ }
+
+  let md = tidy(makeTurndown(opts.gfm).turndown(html));
+
+  /* файловый режим: плавающие/невостребованные изображения — не теряем пиксели */
+  if (!opts.embedImages && media.length){
+    const unreferenced = media.filter(f => !usedPaths.has(f.path));
+    if (unreferenced.length){
+      md = md.replace(/\n+$/, '') + '\n\n<!-- изображения без позиции в тексте (плавающие или из колонтитулов) -->';
+      unreferenced.forEach(f => { md += `\n\n![${f.path.replace(/^media\//, '')}](${f.path})`; });
+      md += '\n';
+    }
+  }
+  if (dropped)
+    md = md.replace(/\n+$/, '') + `\n\n<!-- не встроено изображений: ${dropped} — превышен лимит (${formatBytes(MAX_IMG_EMBED)} на изображение или ${formatBytes(DOCX_IMG_TOTAL)} суммарно) -->\n`;
+  if (!md.trim()) return '<!-- документ не содержит извлекаемого текста -->\n';
+  return md;
 }
 
 async function sheetsToMd(wb, opts){
@@ -674,7 +843,8 @@ function makeBoldLookup(page, styles){
     } catch(e){}
     if (!bold){
       try {
-        const fo = page.commonObjs.get(fontName);
+        const objs = page.commonObjs || (page._transport && page._transport.commonObjs);
+        const fo = objs ? objs.get(fontName) : null;
         const nm = String((fo && (fo.name || fo.fallbackName || '')) || '');
         if (/bold|black|heavy|semib/i.test(nm)) bold = true;
       } catch(e){}
@@ -746,10 +916,6 @@ function buildPdfLines(items, isBold){
   return { lines, wordGaps };
 }
 
-/* ── таблицы PDF: реконструкция сетки ПО ГРАНИЦАМ (фикс «агента PDF-таблиц») ──
-   Границы колонок = середины больших зазоров, собранные по всем строкам группы
-   и сгруппированные. Устойчиво к центрированным и узким колонкам, где стартовые
-   X фрагментов у каждой строки свои (старый алгоритм плодил фантомные колонки). */
 function isRuleLine(L){
   return L.parts.length <= 2 && /^[\s\-–—_=∙·•]{3,}$/.test(L.text);
 }
@@ -759,20 +925,26 @@ function gridFromLines(group, bodyH, medGap, BIG){
   for (const L of rowLines){
     for (let i = 1; i < L.parts.length; i++){
       const gap = L.parts[i].x - (L.parts[i-1].x + L.parts[i-1].w);
-      if (gap >= BIG) bounds.push(L.parts[i-1].x + L.parts[i-1].w + gap / 2);
+      if (gap >= BIG) bounds.push({ x: L.parts[i-1].x + L.parts[i-1].w + gap / 2, row: L });
     }
   }
   if (!bounds.length) return null;
-  bounds.sort((a,b) => a - b);
-  /* соседние границы одной колонки слипаются в одну (цепочечная группировка) */
+  bounds.sort((a,b) => a.x - b.x);
   const LINK = Math.max(BIG * 0.5, bodyH);
   const cols = [];
   let acc = [];
+  const flush = () => {
+    if (!acc.length) return;
+    const x = acc.reduce((s,v) => s + v.x, 0) / acc.length;
+    const rows = new Set(acc.map(v => v.row));
+    if (rows.size >= 2) cols.push(x);
+    acc = [];
+  };
   for (const b of bounds){
-    if (!acc.length || b - acc[acc.length - 1] <= LINK) acc.push(b);
-    else { cols.push(acc.reduce((s,v) => s + v, 0) / acc.length); acc = [b]; }
+    if (!acc.length || b.x - acc[acc.length - 1].x <= LINK) acc.push(b);
+    else { flush(); acc = [b]; }
   }
-  if (acc.length) cols.push(acc.reduce((s,v) => s + v, 0) / acc.length);
+  flush();
   if (cols.length < 1 || cols.length > MAX_PDF_COLS) return null;
   const width = cols.length + 1;
   const rows = [];
@@ -794,7 +966,6 @@ function gridFromLines(group, bodyH, medGap, BIG){
   let filledCols = 0;
   for (let ci = 0; ci < width; ci++) if (dataRows.some(r => r[ci] !== '')) filledCols++;
   if (filledCols < 2) return null;
-  /* двухколоночная вёрстка — не таблица: ровно 2 колонки и длинные «ячейки» */
   if (width === 2 && dataRows.length >= 4){
     const avg = dataRows.reduce((s, r) => s + r[0].length + r[1].length, 0) / (2 * dataRows.length);
     if (avg > 90) return null;
@@ -1063,13 +1234,29 @@ async function pptxToMd(buf, opts){
 }
 
 function htmlToMd(buf, opts){
-  const doc = new DOMParser().parseFromString(decodeText(buf), 'text/html');
+  const doc = new DOMParser().parseFromString(decodeHtmlText(buf), 'text/html');
   doc.querySelectorAll('script,style,noscript').forEach(n => n.remove());
-  if (!opts.embedImages) doc.querySelectorAll('img').forEach(n => n.remove());
+  let dropped = 0;
+  const imgs = Array.from(doc.querySelectorAll('img'));
+  if (opts.embedImages){
+    const CAP = Math.ceil(MAX_IMG_EMBED * 1.4);
+    let used = 0;
+    imgs.forEach(im => {
+      const src = im.getAttribute('src') || '';
+      if (/^data:/i.test(src) && (src.length > CAP || used + src.length > DOCX_IMG_TOTAL)){ dropped++; im.remove(); return; }
+      used += src.length;
+    });
+  } else {
+    imgs.forEach(im => im.remove());
+  }
   const title = doc.querySelector('title') ? doc.querySelector('title').textContent.trim() : '';
   let md = makeTurndown(opts.gfm).turndown(doc.body.innerHTML);
   if (title) md = '# ' + mdInline(title) + '\n\n' + md;
-  return tidy(md);
+  md = tidy(md);
+  if (dropped)
+    md = md.replace(/\n+$/, '') + `\n\n<!-- не встроено изображений: ${dropped} — превышен лимит (${formatBytes(MAX_IMG_EMBED)} на изображение или ${formatBytes(DOCX_IMG_TOTAL)} суммарно) -->\n`;
+  if (!md.trim()) return '<!-- документ не содержит извлекаемого текста -->\n';
+  return md;
 }
 
 function imageToMd(file, opts){
@@ -1084,7 +1271,12 @@ function imageToMd(file, opts){
     if (file.size > MAX_IMG_EMBED)
       return resolve(`<!-- изображение ${alt} не встроено: больше 5 МБ -->\n![${alt}](<${file.name}>)\n`);
     const r = new FileReader();
-    r.onload = () => resolve(`![${alt}](<${r.result}>)\n`);
+    r.onload = () => {
+      let md = `![${alt}](<${r.result}>)\n`;
+      if (/heic/i.test(file.name) || /heic/i.test(file.type || ''))
+        md += `<!-- внимание: формат HEIC большинство браузеров не отображает в предпросмотре -->\n`;
+      resolve(md);
+    };
     r.onerror = () => reject(fail('Не удалось прочитать изображение.'));
     r.readAsDataURL(file);
   });
@@ -1128,7 +1320,7 @@ async function convertBuffer(file, opts){
   }
   if (ext === 'csv' || ext === 'tsv'){
     requireEngine('xlsx', 'SheetJS');
-    try { return await sheetsToMd(XLSX.read(decodeText(buf), {type:'string'}), opts); }
+    try { return await sheetsToMd(XLSX.read(decodeText(buf), { type:'string', raw:true }), opts); }
     catch(e){ throw fail('Не удалось разобрать CSV/TSV: файл повреждён.'); }
   }
   if (ext === 'pdf')  return pdfToMd(buf, opts);
@@ -1163,6 +1355,7 @@ function makeOpts(entry){
     gfm: state.opts.gfm,
     exactNumbers: state.opts.exactNumbers,
     isCancelled: () => entry.cancelled === true,
+    attachMedia: arr => { entry.media = arr; }, /* docx: media-файлы для zip-скачивания */
     onProgress: msg => {
       entry.progress = msg;
       if (state.activeId === entry.id){
@@ -1187,7 +1380,7 @@ function handleFiles(fileList){
   for (const file of fileList){
     const entry = { id: ++state.seq, file, status: 'working', md: '', error: null,
                     cancelled: false, edited: false, cursor: null, rowEl: null,
-                    started: false, progress: null, opts: null };
+                    started: false, progress: null, media: null, opts: null };
     entry.opts = makeOpts(entry);
     if (file.size > MAX_FILE_BYTES){
       entry.status = 'error';
@@ -1258,7 +1451,7 @@ function retryEntry(id){
   f.status = 'working'; f.error = null; f.md = '';
   f.cancelled = false; f.edited = false; f.cursor = null;
   f.started = false; f.progress = null;
-  f._pv = null; /* фикс: кэш предпросмотра сбрасывается и при повторе тоже */
+  f._pv = null; f.media = null;
   f.opts = makeOpts(f);
   enqueue(f);
   updateUI();
@@ -1363,6 +1556,7 @@ function updateStats(){
   const el = $('vStats');
   if (!f || f.status !== 'done' || !f.md){ el.textContent = ''; return; }
   const md = f.md;
+  if (md.length > MAX_PREVIEW_CHARS){ el.textContent = formatBytes(md.length) + ' текста'; return; }
   const words = (md.match(/[\p{L}\p{N}]+/gu) || []).length;
   const lines = md.split('\n').length;
   el.textContent = `${md.length.toLocaleString('ru-RU')} симв · ${words.toLocaleString('ru-RU')} слов · ${lines.toLocaleString('ru-RU')} стрк`;
@@ -1370,6 +1564,10 @@ function updateStats(){
 function renderPreviewInto(root, f){
   if (!window.DOMPurify){
     root.textContent = 'Предпросмотр недоступен: не загрузился санитайзер (DOMPurify). Проверьте сеть или используйте режим «Разметка».';
+    return;
+  }
+  if (f.md.length > MAX_PREVIEW_CHARS){
+    root.textContent = 'Предпросмотр отключён: разметка больше 2 МБ — рендеринг заморозил бы вкладку. Пользуйтесь режимом «Разметка».';
     return;
   }
   if (!f._pv || f._pv.md !== f.md){
@@ -1380,9 +1578,15 @@ function renderPreviewInto(root, f){
     f._pv = { md: f.md, html };
   }
   root.innerHTML = f._pv.html;
-  root.querySelectorAll('img,source,audio,video,track').forEach(el => {
-    const s = (el.getAttribute('src') || el.getAttribute('srcset') || '').trim();
-    if (s && !/^(data:|blob:)/i.test(s)) el.remove();
+  root.querySelectorAll('img,source,audio,video,track,iframe,embed,object,input[type="image"]').forEach(el => {
+    const bad = ['src','data','srcset','poster','background'].some(a => {
+      const v = (el.getAttribute(a) || '').trim();
+      return v !== '' && !/^(data:|blob:)/i.test(v);
+    });
+    if (bad) el.remove();
+  });
+  root.querySelectorAll('[style]').forEach(el => {
+    if (/url\(/i.test(el.getAttribute('style') || '')) el.removeAttribute('style');
   });
   root.querySelectorAll('a[href]').forEach(a => {
     if (!/^(mailto:|#)/i.test((a.getAttribute('href') || '').trim())){
@@ -1445,12 +1649,23 @@ function renderViewer(){
     renderPreviewInto(p, f);
     body.appendChild(p); return;
   }
-  /* Режим «Разметка»: ранний выход, только если редактор этого файла —
-     единственное содержимое экрана; иначе экран очищается целиком */
   const existing = body.querySelector('.v-src');
   if (existing && existing.dataset.fileId === String(f.id) && body.children.length === 1) return;
   saveCursor(body);
   body.textContent = '';
+  if (f.md.length > EDITOR_MAX_CHARS){
+    const ro = document.createElement('div');
+    ro.className = 'v-src-ro';
+    const note = document.createElement('p');
+    note.className = 'ro-note';
+    note.textContent = 'Разметка больше 5 МБ — редактор такое не вытягивает. Показаны первые 512 КБ; копирование и скачивание работают с полным файлом.';
+    const txt = document.createElement('div');
+    txt.className = 'ro-text';
+    txt.textContent = f.md.slice(0, 512 * 1024) + '\n\n…';
+    ro.append(note, txt);
+    body.appendChild(ro);
+    return;
+  }
   const ta = document.createElement('textarea');
   ta.className = 'v-src';
   ta.dataset.fileId = f.id;
@@ -1484,6 +1699,7 @@ async function copyActive(){
   if (!f || f.status !== 'done') return;
   try { await navigator.clipboard.writeText(f.md); toast('Markdown скопирован в буфер обмена'); }
   catch(e){
+    if (f.md.length > EDITOR_MAX_CHARS){ toast('Слишком большой текст для буфера — скачайте .md-файл', 'err'); return; }
     const ta = document.createElement('textarea');
     ta.value = f.md; ta.style.cssText = 'position:fixed;opacity:0';
     document.body.appendChild(ta); ta.select();
@@ -1492,11 +1708,27 @@ async function copyActive(){
     ta.remove();
   }
 }
-function downloadActiveFile(){
+async function downloadActiveFile(){
   const f = activeFile();
   if (!f || f.status !== 'done'){ toast('Пока нечего скачивать', 'info'); return; }
-  downloadText(outName(f.file), f.md);
-  toast('Файл ' + outName(f.file) + ' скачан');
+  const name = outName(f.file);
+  /* docx с файловыми изображениями: .md + media/ одним архивом */
+  if (f.media && f.media.length){
+    try {
+      requireEngine('jszip', 'JSZip');
+      const zip = new JSZip();
+      zip.file(name, f.md);
+      f.media.forEach(m => zip.file(m.path, m.bytes));
+      const blob = await zip.generateAsync({ type: 'blob', compression: 'STORE' });
+      downloadBlob(name.replace(/\.md$/, '') + '.zip', blob);
+      toast(`Архив: ${name} + ${f.media.length} файл(ов) из media/`);
+    } catch(e){
+      if (e && e.friendly) toast(e.message, 'err'); else toast('Не удалось собрать архив', 'err');
+    }
+    return;
+  }
+  downloadText(name, f.md);
+  toast('Файл ' + name + ' скачан');
 }
 async function zipAll(){
   const doneFiles = state.files.filter(f => f.status === 'done');
@@ -1508,9 +1740,16 @@ async function zipAll(){
     const used = {};
     doneFiles.forEach(f => {
       let n = outName(f.file);
+      /* файлы с media/ — в своей папке, чтобы относительные пути работали */
+      if (f.media && f.media.length){
+        const folder = n.replace(/\.md$/, '');
+        zip.file(folder + '/' + n, f.md, { compression: f.md.length > 1048576 ? 'STORE' : 'DEFLATE' });
+        f.media.forEach(m => zip.file(folder + '/' + m.path, m.bytes));
+        return;
+      }
       if (used[n]){ const base = n.replace(/\.md$/, ''); let i = 2; while (used[base + ' (' + i + ').md']) i++; n = base + ' (' + i + ').md'; }
       used[n] = true;
-      zip.file(n, f.md);
+      zip.file(n, f.md, { compression: f.md.length > 1048576 ? 'STORE' : 'DEFLATE' });
     });
     const blob = await zip.generateAsync({ type: 'blob' });
     downloadBlob('tomd-markdown.zip', blob);
@@ -1640,8 +1879,9 @@ function resetClearArm(){
     clearTimer = setTimeout(resetClearArm, 3500);
   } else {
     resetClearArm();
+    const hadEdits = state.files.some(f => f.edited);
     clearAll();
-    toast('Очередь очищена — файлы удалены из памяти', 'info');
+    toast(hadEdits ? 'Очередь очищена — несохранённые правки потеряны' : 'Очередь очищена — файлы удалены из памяти', 'info');
   }
 });
 
@@ -1663,7 +1903,9 @@ document.querySelector('.seg').addEventListener('keydown', e => {
  $('optImages').addEventListener('change', e => {
   state.opts.embedImages = e.target.checked;
   updateQueueChrome();
-  toast('Встраивание изображений: ' + (e.target.checked ? 'вкл' : 'выкл') + ' — применюсь к новым файлам', 'info');
+  toast(e.target.checked
+    ? 'Изображения: base64 внутри .md (один самодостаточный файл)'
+    : 'Изображения: файлами media/ — скачивание даст zip: .md + картинки', 'info');
 });
  $('optGfm').addEventListener('change', e => {
   state.opts.gfm = e.target.checked;
@@ -1680,7 +1922,7 @@ document.querySelector('.seg').addEventListener('keydown', e => {
     f.status = 'working'; f.error = null; f.md = '';
     f.cancelled = false; f.edited = false; f.cursor = null;
     f.started = false; f.progress = null;
-    f._pv = null;
+    f._pv = null; f.media = null;
     f.opts = makeOpts(f);
     enqueue(f);
   });
