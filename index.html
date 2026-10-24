@@ -1,0 +1,1059 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Конвертер в md</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231C1917'/%3E%3Ctext x='32' y='44' font-family='monospace' font-size='30' font-weight='700' fill='%23E24E0F' text-anchor='middle'%3Emd%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Lora:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<!-- Локальные движки конвертации: файлы обрабатываются только в браузере -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/turndown/7.1.2/turndown.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
+<style>
+:root{
+  --paper:#F5F1E8; --panel:#FDFCF7; --ink:#1C1917; --ink-2:#57534E; --ink-3:#A19A8E;
+  --line:#DCD5C5; --line-2:#C9C1AE;
+  --accent:#E24E0F; --accent-soft:#FAE4D7; --accent-deep:#B93F08;
+  --ok:#3E7A4E; --err:#B3361B;
+  --mono:'JetBrains Mono',ui-monospace,SFMono-Regular,monospace;
+  --sans:'Space Grotesk','Segoe UI',sans-serif;
+  --serif:'Lora',Georgia,serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{
+  font-family:var(--sans);color:var(--ink);background:var(--paper);
+  background-image:
+    linear-gradient(rgba(28,25,23,.04) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(28,25,23,.04) 1px,transparent 1px);
+  background-size:30px 30px;
+  -webkit-font-smoothing:antialiased;
+}
+::selection{background:var(--accent);color:#fff}
+.wrap{max-width:1100px;margin:0 auto;padding:0 24px}
+main.wrap{padding:42px 24px 24px}
+button{font-family:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* ── шапка ─────────────────────────────── */
+.site-head .wrap{display:flex;align-items:center;justify-content:space-between;padding-top:18px;padding-bottom:18px}
+.brand{font:700 21px/1 var(--sans);letter-spacing:-.02em;color:var(--ink);text-decoration:none}
+.brand-dot{color:var(--accent)}
+.head-note{display:flex;align-items:center;gap:8px;font:500 11.5px var(--mono);color:var(--ink-2)}
+.pulse-dot{width:7px;height:7px;border-radius:50%;background:var(--ok);animation:pulse 2.4s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+
+/* ── hero ──────────────────────────────── */
+.hero{margin-bottom:30px}
+.hero-title{font:600 clamp(36px,6vw,60px)/1.06 var(--sans);letter-spacing:-.03em}
+.u-word{position:relative;white-space:nowrap}
+.u-word svg{position:absolute;left:0;bottom:-.1em;width:100%;height:.17em;overflow:visible}
+.u-word path{fill:none;stroke:var(--accent);stroke-width:6.5;stroke-linecap:round;
+  stroke-dasharray:1;stroke-dashoffset:1;animation:drawline .9s .45s cubic-bezier(.6,0,.2,1) forwards}
+@keyframes drawline{to{stroke-dashoffset:0}}
+.hero-sub{margin-top:16px;max-width:66ch;font:400 15.5px/1.65 var(--sans);color:var(--ink-2)}
+.hero-sub b{color:var(--ink);font-weight:600}
+.hero>*,.dropzone,.options{animation:rise .55s both}
+.hero-title{animation-delay:.05s}.hero-sub{animation-delay:.14s}.dropzone{animation-delay:.22s}.options{animation-delay:.3s}
+@keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+
+/* ── приёмная зона ─────────────────────── */
+.dropzone{position:relative;border:1.5px solid var(--ink);background:rgba(253,252,247,.6);
+  padding:50px 24px 36px;text-align:center;cursor:pointer;transition:background .18s,border-color .18s}
+.drop-inner{display:flex;flex-direction:column;align-items:center;gap:16px}
+.drop-glyph{width:46px;height:46px;fill:none;stroke:var(--ink);stroke-width:2;stroke-linecap:round;stroke-linejoin:round;transition:stroke .18s}
+.drop-glyph .glyph-arrow{animation:bob 2.6s ease-in-out infinite}
+@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(4px)}}
+.drop-title{font:600 23px var(--sans);letter-spacing:-.01em;transition:color .18s}
+.drop-alt{font:400 12.5px var(--mono);color:var(--ink-3)}
+.drop-alt kbd{font:600 11px var(--mono);border:1px solid var(--line-2);border-bottom-width:2px;
+  padding:1px 5px;background:#fff;border-radius:3px;color:var(--ink)}
+.drop-formats{margin-top:2px;font:500 12px var(--mono);color:var(--ink-3);letter-spacing:.04em}
+.drop-formats span{white-space:nowrap}
+.drop-formats i{font-style:normal;color:var(--line-2);margin:0 7px}
+.drop-privacy{display:inline-flex;align-items:center;gap:8px;margin-top:14px;
+  font:500 11.5px var(--mono);color:var(--ink-2);max-width:60ch}
+.drop-privacy .ic{width:14px;height:14px;stroke:var(--ok);flex:none}
+/* печатные метки-уголки */
+.crop{position:absolute;width:15px;height:15px;pointer-events:none;transition:transform .2s,border-color .2s}
+.crop.tl{top:-9px;left:-9px;border-top:2px solid var(--ink);border-left:2px solid var(--ink)}
+.crop.tr{top:-9px;right:-9px;border-top:2px solid var(--ink);border-right:2px solid var(--ink)}
+.crop.bl{bottom:-9px;left:-9px;border-bottom:2px solid var(--ink);border-left:2px solid var(--ink)}
+.crop.br{bottom:-9px;right:-9px;border-bottom:2px solid var(--ink);border-right:2px solid var(--ink)}
+.dropzone:hover .crop.tl{transform:translate(-3px,-3px)}.dropzone:hover .crop.tr{transform:translate(3px,-3px)}
+.dropzone:hover .crop.bl{transform:translate(-3px,3px)}.dropzone:hover .crop.br{transform:translate(3px,3px)}
+body.dragging .dropzone{background:var(--accent-soft);border-color:var(--accent)}
+body.dragging .dropzone .crop{border-color:var(--accent)}
+body.dragging .crop.tl{transform:translate(-8px,-8px)}body.dragging .crop.tr{transform:translate(8px,-8px)}
+body.dragging .crop.bl{transform:translate(-8px,8px)}body.dragging .crop.br{transform:translate(8px,8px)}
+body.dragging .dropzone .drop-title{color:var(--accent-deep)}
+body.dragging .dropzone .drop-glyph{stroke:var(--accent)}
+
+/* ── кнопки ────────────────────────────── */
+.btn{display:inline-flex;align-items:center;gap:8px;font:600 14px var(--sans);letter-spacing:.01em;
+  padding:11px 20px;border:1.5px solid var(--ink);background:#fff;color:var(--ink);cursor:pointer;transition:.15s}
+.btn:hover{background:var(--ink);color:var(--paper)}
+.btn:active{transform:translateY(1px)}
+.btn-primary{background:var(--ink);color:var(--paper)}
+.btn-primary:hover{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn-sm{padding:7px 13px;font-size:12.5px;gap:7px}
+.btn:disabled{opacity:.4;pointer-events:none}
+.ic{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.btn-sm .ic{width:13px;height:13px}
+
+/* ── параметры ─────────────────────────── */
+.options{display:flex;align-items:center;flex-wrap:wrap;gap:10px 26px;margin:14px 0 0;padding-left:2px}
+.opt-label{font:700 10.5px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3)}
+.switch{display:inline-flex;align-items:center;gap:9px;font:500 13px var(--sans);color:var(--ink-2);cursor:pointer;user-select:none}
+.switch input{position:absolute;opacity:0;width:0;height:0}
+.sw{width:34px;height:19px;border:1.5px solid var(--ink);background:#fff;position:relative;flex:none;transition:.15s}
+.sw::after{content:'';position:absolute;top:2px;left:2px;width:11px;height:11px;background:var(--ink);transition:.15s}
+.switch input:checked+.sw{background:var(--accent);border-color:var(--accent)}
+.switch input:checked+.sw::after{left:18px;background:#fff}
+.switch input:focus-visible+.sw{outline:2px solid var(--accent);outline-offset:2px}
+
+/* ── рабочая область ───────────────────── */
+.workspace{display:grid;grid-template-columns:300px minmax(0,1fr);gap:20px;align-items:start;margin-top:38px;animation:rise .5s both}
+.workspace[hidden]{display:none}
+.queue,.viewer{background:var(--panel);border:1.5px solid var(--ink);box-shadow:5px 5px 0 rgba(28,25,23,.08)}
+.queue{position:sticky;top:16px}
+.queue-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 14px;border-bottom:1px solid var(--line)}
+.queue-title{font:600 13px var(--sans);letter-spacing:.02em}
+.queue-title span{color:var(--accent);font:700 12px var(--mono);margin-left:4px}
+.queue-actions{display:flex;gap:4px}
+.mini-btn{display:inline-flex;align-items:center;gap:6px;font:500 11.5px var(--mono);color:var(--ink-2);
+  background:none;border:0;padding:5px 7px;cursor:pointer;transition:.12s}
+.mini-btn:hover{color:var(--accent-deep)}
+.mini-btn .ic{width:13px;height:13px}
+.queue-list{max-height:62vh;overflow-y:auto}
+.queue-empty{padding:22px 16px;font:400 12.5px var(--mono);color:var(--ink-3)}
+.q-item{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:10px 12px;border:0;
+  border-bottom:1px solid var(--line);background:transparent;cursor:pointer;transition:background .12s}
+.q-item:last-child{border-bottom:0}
+.q-item:hover{background:rgba(255,255,255,.7)}
+.q-item.active{background:#fff;box-shadow:inset 3px 0 var(--accent)}
+.q-status{width:16px;height:16px;flex:none;display:flex;align-items:center;justify-content:center}
+.q-status .ic{width:14px;height:14px}
+.q-status.done{color:var(--ok)}.q-status.error{color:var(--err)}
+.q-name{flex:1;min-width:0;font:500 12.5px var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.q-item.error .q-name{color:var(--err)}
+.q-meta{display:flex;align-items:center;gap:8px;flex:none}
+.q-ext{font:700 9.5px var(--mono);text-transform:uppercase;letter-spacing:.06em;color:var(--ink-2);border:1px solid var(--line-2);padding:2px 5px}
+.q-size{font:400 10.5px var(--mono);color:var(--ink-3)}
+.spin{width:13px;height:13px;border:2px solid var(--line-2);border-top-color:var(--accent);border-radius:50%;animation:rot .7s linear infinite}
+@keyframes rot{to{transform:rotate(360deg)}}
+
+/* ── просмотрщик ───────────────────────── */
+.viewer-bar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:12px 16px;border-bottom:1px solid var(--line)}
+.v-file{display:flex;align-items:center;gap:9px;min-width:0}
+.v-badge{font:700 10px var(--mono);text-transform:uppercase;background:var(--accent-soft);color:var(--accent-deep);padding:3px 6px;flex:none}
+.v-name{font:600 13px var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:32vw}
+.seg{display:inline-flex;border:1.5px solid var(--ink);background:#fff;margin-left:auto}
+.seg-btn{font:600 12.5px var(--sans);padding:7px 14px;background:transparent;border:0;cursor:pointer;color:var(--ink);display:inline-flex;align-items:center;gap:6px;transition:.12s}
+.seg-btn+.seg-btn{border-left:1.5px solid var(--ink)}
+.seg-btn.active{background:var(--ink);color:var(--paper)}
+.seg-btn .ic{width:13px;height:13px}
+.v-stats{font:400 11.5px var(--mono);color:var(--ink-3);white-space:nowrap}
+.v-actions{display:flex;gap:8px}
+.viewer-body{position:relative;min-height:460px}
+.v-src{display:block;width:100%;min-height:440px;height:62vh;max-height:840px;border:0;outline:none;resize:vertical;
+  padding:22px 26px;font:400 13.5px/1.75 var(--mono);color:var(--ink);background:var(--panel);tab-size:2}
+.v-state{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;min-height:460px;padding:60px 24px;text-align:center}
+.v-state .big-ic{width:30px;height:30px;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.v-state h3{font:600 18px var(--sans)}
+.v-state p{font:400 13px/1.7 var(--mono);color:var(--ink-2);max-width:58ch}
+.v-error .big-ic{stroke:var(--err)}
+.v-error h3{color:var(--err)}
+
+/* предпросмотр */
+.prose{font:400 16.5px/1.75 var(--serif);padding:30px 34px 40px;max-width:80ch;color:var(--ink)}
+.prose>*+*{margin-top:1em}
+.prose h1,.prose h2,.prose h3,.prose h4{font-family:var(--sans);line-height:1.25;margin-top:1.6em;letter-spacing:-.01em}
+.prose h1{font-size:29px}.prose h2{font-size:23px}.prose h3{font-size:18.5px}.prose h4{font-size:16px}
+.prose a{color:var(--accent-deep);text-decoration:underline;text-underline-offset:2px}
+.prose code{font:500 13px var(--mono);background:#EFE9DB;padding:2px 6px;border-radius:3px}
+.prose pre{background:var(--ink);color:var(--paper);padding:16px 18px;overflow-x:auto;border-radius:6px}
+.prose pre code{background:none;color:inherit;padding:0;font-size:13px}
+.prose blockquote{border-left:3px solid var(--accent);padding:2px 0 2px 16px;color:var(--ink-2);font-style:italic}
+.prose img{max-width:100%;height:auto;border:1px solid var(--line)}
+.prose hr{border:0;border-top:1px solid var(--line-2);margin:1.8em 0}
+.prose ul,.prose ol{padding-left:1.5em}
+.prose li+li{margin-top:.25em}
+.tbl-wrap{overflow-x:auto}
+.prose table{border-collapse:collapse;font-size:14.5px}
+.prose th{font:600 12.5px var(--sans);background:#F0EBDE;text-align:left}
+.prose th,.prose td{border:1px solid var(--line-2);padding:7px 12px;vertical-align:top}
+.prose h1:first-child,.prose h2:first-child{margin-top:0}
+
+/* ── тосты ─────────────────────────────── */
+.toasts{position:fixed;right:20px;bottom:20px;display:flex;flex-direction:column;gap:10px;z-index:100}
+.toast{display:flex;align-items:center;gap:10px;background:var(--ink);color:var(--paper);
+  font:500 12.5px var(--mono);padding:11px 16px;max-width:340px;border-left:3px solid var(--accent);
+  opacity:0;transform:translateY(12px);transition:.25s cubic-bezier(.2,.7,.3,1)}
+.toast.show{opacity:1;transform:none}
+.toast .ic{width:14px;height:14px;flex:none}
+.toast.ok{border-left-color:var(--ok)}.toast.ok .ic{color:#7CC48D}
+.toast.err{border-left-color:var(--err)}.toast.err .ic{color:#F09B84}
+.toast.info{border-left-color:var(--accent)}.toast.info .ic{color:var(--accent)}
+
+/* ── футер ─────────────────────────────── */
+footer{margin-top:64px;border-top:1.5px solid var(--ink)}
+footer .wrap{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;padding-top:18px;padding-bottom:26px;
+  font:400 11.5px var(--mono);color:var(--ink-3)}
+
+/* ── адаптив ───────────────────────────── */
+@media (max-width:920px){
+  .workspace{grid-template-columns:1fr}
+  .queue{position:static}
+  .queue-list{max-height:220px}
+  .seg{margin-left:0}
+  .v-name{max-width:none}
+}
+@media (max-width:640px){
+  main.wrap{padding-top:30px}
+  .dropzone{padding:36px 16px 26px}
+  .v-stats{display:none}
+  .hero-sub{font-size:14px}
+}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01s!important;transition-duration:.01s!important}
+}
+</style>
+</head>
+<body>
+
+<!-- набор иконок -->
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none">
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="1.5"/><path d="M5 15V5.5A1.5 1.5 0 0 1 6.5 4H16"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11m0 0 4.5-4.5M12 15 7.5 10.5M4.5 19.5h15"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6.5 6.5l11 11m0-11-11 11"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 12.5h9l1-12.5"/></symbol>
+  <symbol id="i-zip" viewBox="0 0 24 24"><path d="M4 8l8-4.5L20 8v8l-8 4.5L4 16Z"/><path d="M4 8l8 4.5L20 8M12 12.5V21"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 4 21 19.5H3Z"/><path d="M12 10v4.5M12 17.2v.3"/></symbol>
+  <symbol id="i-code" viewBox="0 0 24 24"><path d="m8.5 8-4 4 4 4m7-8 4 4-4 4"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5M12 7.6v.3"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="10" rx="1.5"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/></symbol>
+</svg>
+
+<header class="site-head">
+  <div class="wrap">
+    <a class="brand" href="#">tomd<span class="brand-dot">.</span></a>
+    <div class="head-note"><span class="pulse-dot"></span>локально · файлы не хранятся и не отправляются</div>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="hero">
+    <h1 class="hero-title">Конвертируйте свои файлы<br>в
+      <span class="u-word">Markdown<svg viewBox="0 0 200 14" preserveAspectRatio="none"><path pathLength="1" d="M3 10 Q 100 1 197 8"/></svg></span>
+    </h1>
+    <p class="hero-sub">Word, Excel, PowerPoint, PDF, CSV, HTML, изображения, исходный код и обычный текст превращаются в чистую разметку <b>прямо в вашем браузере</b> — файлы нигде не сохраняются и никуда не отправляются.</p>
+  </section>
+
+  <section class="dropzone" id="dropzone" aria-label="Зона загрузки файлов">
+    <span class="crop tl"></span><span class="crop tr"></span><span class="crop bl"></span><span class="crop br"></span>
+    <div class="drop-inner">
+      <svg class="drop-glyph" viewBox="0 0 48 48"><circle cx="24" cy="24" r="20"/><path class="glyph-arrow" d="M24 15v15m0 0-6.5-6.5M24 30l6.5-6.5"/></svg>
+      <div class="drop-title" id="dropTitle">Перетащите файлы сюда</div>
+      <button class="btn btn-primary" id="pickBtn" type="button"><svg class="ic"><use href="#i-plus"/></svg>выбрать на диске</button>
+      <div class="drop-alt">…или вставьте из буфера — <kbd>Ctrl</kbd>+<kbd>V</kbd> (файлы, скриншоты, текст)</div>
+      <div class="drop-formats">
+        <span>docx</span><i>·</i><span>xlsx</span><i>·</i><span>pdf</span><i>·</i><span>pptx</span><i>·</i><span>csv</span><i>·</i><span>html</span><i>·</i><span>txt</span><i>·</i><span>изображения</span><i>·</i><span>код</span>
+      </div>
+      <div class="drop-privacy">
+        <svg class="ic"><use href="#i-lock"/></svg>
+        <span>Обработка полностью локальна: файлы не сохраняются и не передаются ни на какой сервер · лимит — 100 МБ на файл</span>
+      </div>
+    </div>
+    <input type="file" id="fileInput" multiple hidden>
+  </section>
+
+  <section class="options">
+    <span class="opt-label">Параметры</span>
+    <label class="switch"><input type="checkbox" id="optImages" checked><span class="sw"></span>встраивать изображения (base64)</label>
+    <label class="switch"><input type="checkbox" id="optGfm" checked><span class="sw"></span>таблицы GitHub (GFM)</label>
+  </section>
+
+  <section class="workspace" id="workspace" hidden>
+    <aside class="queue">
+      <div class="queue-head">
+        <div class="queue-title">Файлы<span id="queueCount">0</span></div>
+        <div class="queue-actions">
+          <button class="mini-btn" id="zipAllBtn" hidden type="button"><svg class="ic"><use href="#i-zip"/></svg>скачать всё (.zip)</button>
+          <button class="mini-btn" id="clearBtn" type="button"><svg class="ic"><use href="#i-trash"/></svg>очистить</button>
+        </div>
+      </div>
+      <div class="queue-list" id="queueList"></div>
+    </aside>
+
+    <div class="viewer">
+      <div class="viewer-bar">
+        <div class="v-file"><span class="v-badge">md</span><span class="v-name" id="vName">—</span></div>
+        <div class="seg" role="tablist" aria-label="Режим просмотра">
+          <button class="seg-btn active" data-view="source" type="button"><svg class="ic"><use href="#i-code"/></svg>Разметка</button>
+          <button class="seg-btn" data-view="preview" type="button"><svg class="ic"><use href="#i-eye"/></svg>Предпросмотр</button>
+        </div>
+        <div class="v-stats" id="vStats"></div>
+        <div class="v-actions">
+          <button class="btn btn-sm" id="copyBtn" type="button" disabled><svg class="ic"><use href="#i-copy"/></svg>Копировать</button>
+          <button class="btn btn-sm btn-primary" id="dlBtn" type="button" disabled><svg class="ic"><use href="#i-download"/></svg>Скачать .md</button>
+        </div>
+      </div>
+      <div class="viewer-body" id="viewerBody"></div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>tomd — конвертер файлов в Markdown</span>
+    <span>Вся обработка выполняется локально в браузере: ничего не сохраняется и не отправляется · лимит — 100 МБ на файл</span>
+  </div>
+</footer>
+
+<div class="toasts" id="toasts"></div>
+
+<script>
+/* ═══════════════════════ утилиты ═══════════════════════ */
+const $ = id => document.getElementById(id);
+const escHtml = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const fail = msg => { const e = new Error(msg); e.friendly = true; return e; };
+const pad2 = n => String(n).padStart(2, '0');
+
+function decodeText(buf){
+  const b = new Uint8Array(buf.slice(0, 3));
+  if (b[0] === 0xFF && b[1] === 0xFE) return new TextDecoder('utf-16le').decode(buf);
+  if (b[0] === 0xFE && b[1] === 0xFF) return new TextDecoder('utf-16be').decode(buf);
+  return new TextDecoder('utf-8').decode(buf);
+}
+function formatBytes(b){
+  if (b < 1024) return b + ' Б';
+  if (b < 1048576) return (b/1024).toFixed(b < 10240 ? 1 : 0) + ' КБ';
+  return (b/1048576).toFixed(1) + ' МБ';
+}
+function outName(file){
+  const n = file.name;
+  return (/\.[^./\\]+$/.test(n) ? n.replace(/\.[^./\\]+$/, '') : n) + '.md';
+}
+function tidy(md){
+  return md.replace(/\u00a0/g,' ').replace(/\n{3,}/g,'\n\n').trim() + '\n';
+}
+function looksBinary(buf){
+  const u8 = new Uint8Array(buf);
+  let start = 0;
+  if (u8.length >= 2 && ((u8[0] === 0xFF && u8[1] === 0xFE) || (u8[0] === 0xFE && u8[1] === 0xFF))) start = 2;
+  const b = u8.slice(start, start + 4096);
+  for (let i = 0; i < b.length; i++) if (b[i] === 0) return true;
+  return false;
+}
+function downloadBlob(name, blob){
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+const downloadText = (name, text) => downloadBlob(name, new Blob([text], {type:'text/markdown;charset=utf-8'}));
+
+/* тосты */
+function toast(msg, type = 'ok'){
+  const icons = {ok:'i-check', err:'i-x', info:'i-info'};
+  const el = document.createElement('div');
+  el.className = 'toast ' + type;
+  el.innerHTML = `<svg class="ic"><use href="#${icons[type]}"/></svg><span>${escHtml(msg)}</span>`;
+  $('toasts').appendChild(el);
+  requestAnimationFrame(() => el.classList.add('show'));
+  setTimeout(() => { el.classList.remove('show'); setTimeout(() => el.remove(), 300); }, 2800);
+}
+
+/* ═══════════════════════ таблицы (Excel/CSV/PPTX/docx) ═══════════════════════ */
+const MAX_TABLE_ROWS = 1500;
+function rowsToGfm(rows){
+  if (!rows.length) return '';
+  const norm = s => String(s).trim() === '' ? ' '
+    : String(s).trim().replace(/\|/g,'\\|').replace(/\r?\n/g,'<br>');
+  const width = Math.max(1, ...rows.map(r => r.length));
+  const pad = cells => {
+    const c = cells.slice();
+    while (c.length < width) c.push('');
+    return '| ' + c.map(x => norm(x)).join(' | ') + ' |';
+  };
+  const out = [pad(rows[0]), '| ' + Array.from({length: width}, () => '---').join(' | ') + ' |'];
+  rows.slice(1).forEach(r => { if (r.some(c => String(c).trim() !== '')) out.push(pad(r)); });
+  return out.join('\n');
+}
+function rowsToHtml(rows){
+  const e = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  let h = '<table>\n  <thead>\n    <tr>' + rows[0].map(c => '<th>' + e(c) + '</th>').join('') + '</tr>\n  </thead>\n  <tbody>\n';
+  rows.slice(1).forEach(r => { h += '    <tr>' + r.map(c => '<td>' + e(c) + '</td>').join('') + '</tr>\n'; });
+  return h + '  </tbody>\n</table>';
+}
+
+/* ═══════════════════════ turndown: HTML → Markdown ═══════════════════════ */
+function tableNodeToMarkdown(table, gfm){
+  /* берём только строки ЭТОЙ таблицы — иначе вложенные таблицы размазываются по внешней */
+  const trs = Array.from(table.querySelectorAll('tr')).filter(tr => tr.closest('table') === table);
+  if (!trs.length) return '';
+  if (!gfm){
+    const clone = table.cloneNode(true);
+    clone.querySelectorAll('script,style').forEach(n => n.remove());
+    clone.removeAttribute('style');
+    return '\n\n' + clone.outerHTML + '\n\n';
+  }
+  const rows = trs.map(tr => Array.from(tr.children).map(c => c.textContent));
+  return '\n\n' + rowsToGfm(rows) + '\n\n';
+}
+function makeTurndown(gfm){
+  if (typeof TurndownService === 'undefined')
+    throw fail('Движок turndown не загрузился — проверьте доступ к CDN и обновите страницу.');
+  const td = new TurndownService({
+    headingStyle:'atx', hr:'---', bulletListMarker:'-',
+    codeBlockStyle:'fenced', emDelimiter:'*', strongDelimiter:'**', linkStyle:'inlined'
+  });
+  td.addRule('gfm-table', {
+    filter: node => node.nodeName === 'TABLE',
+    replacement: (c, node) => tableNodeToMarkdown(node, gfm)
+  });
+  ['THEAD','TBODY','TFOOT','TR','TH','TD'].forEach(tag =>
+    td.addRule('tbl-skip-' + tag, { filter: tag, replacement: () => '' }));
+  return td;
+}
+
+/* ═══════════════════════ конвертеры ═══════════════════════ */
+
+/* Word (.docx): mammoth → HTML → turndown */
+async function docxToMd(buf, opts){
+  if (typeof mammoth === 'undefined') throw fail('Парсер Word не загрузился — проверьте доступ к CDN.');
+  let html;
+  try { html = (await mammoth.convertToHtml({ arrayBuffer: buf })).value; }
+  catch(e){ throw fail('Не удалось прочитать .docx: файл повреждён или это старый формат — пересохраните как .docx.'); }
+  if (!opts.embedImages) html = html.replace(/<img[^>]*>/g, '');
+  return tidy(makeTurndown(opts.gfm).turndown(html));
+}
+
+/* Excel / CSV → markdown-таблицы (каждый лист — свой раздел) */
+function sheetsToMd(wb, opts){
+  const names = wb.SheetNames.slice(0, 40);
+  const multi = names.length > 1;
+  const parts = [];
+  names.forEach(name => {
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[name], { header:1, raw:false, defval:'' });
+    while (rows.length && rows[rows.length-1].every(c => String(c).trim() === '')) rows.pop();
+    while (rows.length && rows[0].every(c => String(c).trim() === '')) rows.shift();
+    if (!rows.length){ if (multi) parts.push(`## ${name}\n\n<!-- пустой лист -->`); return; }
+    const shown = rows.slice(0, MAX_TABLE_ROWS);
+    let part = (multi ? `## ${name}\n\n` : '') + (opts.gfm ? rowsToGfm(shown) : rowsToHtml(shown));
+    if (rows.length > MAX_TABLE_ROWS) part += `\n\n<!-- показаны первые ${MAX_TABLE_ROWS} строк из ${rows.length} -->`;
+    parts.push(part);
+  });
+  let md = parts.join('\n\n---\n\n');
+  if (!md) md = '<!-- в файле нет данных -->';
+  if (wb.SheetNames.length > 40) md += `\n\n<!-- показаны первые 40 листов из ${wb.SheetNames.length} -->`;
+  return md + '\n';
+}
+
+/* PDF: pdf.js — сборка строк по координатам, эвристика заголовков по кеглю */
+async function pdfToMd(buf){
+  if (typeof pdfjsLib === 'undefined') throw fail('Движок pdf.js не загрузился — проверьте доступ к CDN.');
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  let pdf;
+  try { pdf = await pdfjsLib.getDocument({ data: buf }).promise; }
+  catch(e){
+    if (e && e.name === 'PasswordException') throw fail('PDF защищён паролем — снимите защиту и попробуйте снова.');
+    if (/worker/i.test(String(e && e.message || e)))
+      throw fail('Не удалось запустить движок PDF — проверьте подключение к сети (остальные форматы работают локально).');
+    throw fail('Не удалось открыть PDF: файл повреждён или это не настоящий PDF.');
+  }
+  const total = pdf.numPages, count = Math.min(total, 300);
+  const pages = [], allHeights = [];
+
+  for (let p = 1; p <= count; p++){
+    const page = await pdf.getPage(p);
+    const tc = await page.getTextContent();
+    const its = [];
+    for (const it of tc.items){
+      if (typeof it.str !== 'string' || !it.str.length) continue;
+      its.push({ x: it.transform[4], y: it.transform[5], w: it.width || 0,
+                 h: it.height || Math.abs(it.transform[3]) || 10, str: it.str });
+    }
+    its.sort((a,b) => (b.y - a.y) || (a.x - b.x));
+    const lines = []; let cur = null;
+    for (const it of its){
+      const tol = Math.max(1.6, it.h * .45);
+      if (cur && Math.abs(cur.y - it.y) <= tol){ cur.parts.push(it); if (it.h > cur.h) cur.h = it.h; }
+      else { cur = { y: it.y, h: it.h, parts: [it] }; lines.push(cur); }
+    }
+    for (const L of lines){
+      L.parts.sort((a,b) => a.x - b.x);
+      let text = '', prev = null;
+      for (const pt of L.parts){
+        if (prev){
+          const gap = pt.x - (prev.x + prev.w);
+          if (gap > Math.max(1, pt.h * .18) && !/\s$/.test(text) && !/^\s/.test(pt.str)) text += ' ';
+        }
+        text += pt.str; prev = pt;
+      }
+      L.text = text.replace(/\s+/g,' ').trim();
+      if (L.text) allHeights.push(L.h);
+    }
+    pages.push(lines);
+  }
+  if (!allHeights.length)
+    throw fail('В PDF нет текстового слоя — похоже, это скан. Здесь поможет только OCR.');
+  allHeights.sort((a,b) => a - b);
+  const med = allHeights[Math.floor(allHeights.length / 2)];
+
+  const pageTexts = pages.map((lines, pi) => {
+    const chunks = []; let prev = null;
+    for (const L of lines){
+      if (!L.text) continue;
+      const head = L.h >= med * 1.55 ? 1 : (L.h >= med * 1.22 ? 2 : 0);
+      if (head){
+        chunks.push({ t:(head === 1 ? '# ' : '## ') + L.text, block:true });
+        prev = { y: L.y, block:true };
+      } else {
+        const cont = prev && !prev.block && prev.y != null &&
+                     (prev.y - L.y) > 0 && (prev.y - L.y) <= med * 2;
+        const last = chunks[chunks.length - 1];
+        if (cont && last && !last.block){
+          if (/[A-Za-zА-Яа-яЁё]-$/.test(last.t) && /^[a-zа-яё]/.test(L.text))
+            last.t = last.t.slice(0,-1) + L.text;
+          else last.t += ' ' + L.text;
+        } else chunks.push({ t: L.text, block:false });
+        prev = { y: L.y, block:false };
+      }
+    }
+    if (!chunks.length) return `<!-- на странице ${pi+1} нет текстового слоя -->`;
+    return chunks.map(c => c.t).join('\n\n');
+  });
+
+  let md = pageTexts.join('\n\n---\n\n');
+  if (total > count) md += `\n\n<!-- показаны первые ${count} страниц из ${total} -->`;
+  return md + '\n';
+}
+
+/* PowerPoint: заметки докладчика через .rels слайда */
+async function pptxNotesText(zip, dp, slidePath){
+  try{
+    const REL_NS = 'http://schemas.openxmlformats.org/package/2006/relationships';
+    const relPath = slidePath.replace(/^ppt\/slides\//, 'ppt/slides/_rels/') + '.rels';
+    const relFile = zip.file(relPath);
+    if (!relFile) return '';
+    const relDoc = dp.parseFromString(await relFile.async('string'), 'application/xml');
+    let notesPath = '';
+    const rels = relDoc.getElementsByTagNameNS(REL_NS, 'Relationship');
+    for (let i = 0; i < rels.length; i++){
+      if ((rels[i].getAttribute('Type') || '').indexOf('/notesSlide') !== -1)
+        notesPath = 'ppt/' + (rels[i].getAttribute('Target') || '').replace(/^\.\.\//, '');
+    }
+    if (!notesPath || !zip.file(notesPath)) return '';
+    const P = 'http://schemas.openxmlformats.org/presentationml/2006/main';
+    const A = 'http://schemas.openxmlformats.org/drawingml/2006/main';
+    const nd = dp.parseFromString(await zip.file(notesPath).async('string'), 'application/xml');
+    const lines = [];
+    const sps = nd.getElementsByTagNameNS(P, 'sp');
+    for (let i = 0; i < sps.length; i++){
+      const ph = sps[i].getElementsByTagNameNS(P, 'ph')[0];
+      if (ph && ph.getAttribute('type') === 'sldNum') continue;
+      const paras = sps[i].getElementsByTagNameNS(A, 'p');
+      for (let j = 0; j < paras.length; j++){
+        const ts = paras[j].getElementsByTagNameNS(A, 't');
+        let t = '';
+        for (let k = 0; k < ts.length; k++) t += ts[k].textContent;
+        t = t.trim();
+        if (t) lines.push(t);
+      }
+    }
+    return lines.join('\n\n');
+  } catch(e){ return ''; }
+}
+
+/* PowerPoint (.pptx): вручную разбираем XML слайдов через JSZip */
+async function pptxToMd(buf, opts){
+  if (typeof JSZip === 'undefined') throw fail('Движок JSZip не загрузился — проверьте доступ к CDN.');
+  let zip;
+  try { zip = await JSZip.loadAsync(buf); }
+  catch(e){ throw fail('Не удалось открыть .pptx: файл повреждён или защищён паролем.'); }
+  const A = 'http://schemas.openxmlformats.org/drawingml/2006/main';
+  const P = 'http://schemas.openxmlformats.org/presentationml/2006/main';
+  const slides = Object.keys(zip.files)
+    .filter(n => /^ppt\/slides\/slide\d+\.xml$/.test(n))
+    .sort((a,b) => parseInt(a.match(/(\d+)/)[1],10) - parseInt(b.match(/(\d+)/)[1],10));
+  if (!slides.length) throw fail('В файле не нашлось слайдов — возможно, он повреждён.');
+  const dp = new DOMParser();
+  const parts = [];
+  for (let i = 0; i < slides.length; i++){
+    let doc;
+    try { doc = dp.parseFromString(await zip.file(slides[i]).async('string'), 'application/xml'); }
+    catch(e){ throw fail('Слайд ' + (i+1) + ' не читается — файл повреждён.'); }
+    let title = null; const body = []; const tables = [];
+    const sps = doc.getElementsByTagNameNS(P, 'sp');
+    for (let s = 0; s < sps.length; s++){
+      const sp = sps[s];
+      const ph = sp.getElementsByTagNameNS(P, 'ph')[0];
+      const type = ph ? (ph.getAttribute('type') || 'body') : 'body';
+      const spLines = [];
+      const paras = sp.getElementsByTagNameNS(A, 'p');
+      for (let j = 0; j < paras.length; j++){
+        const ts = paras[j].getElementsByTagNameNS(A, 't');
+        let text = '';
+        for (let k = 0; k < ts.length; k++) text += ts[k].textContent;
+        text = text.trim();
+        if (!text) continue;
+        const pPr = paras[j].getElementsByTagNameNS(A, 'pPr')[0];
+        spLines.push({ text, lvl: pPr ? parseInt(pPr.getAttribute('lvl') || '0', 10) : 0 });
+      }
+      if (!spLines.length) continue;
+      if (type === 'title' || type === 'ctrTitle') title = spLines.map(l => l.text).join(' ');
+      else spLines.forEach(l => body.push(l));
+    }
+    /* таблицы на слайдах */
+    const tbls = doc.getElementsByTagNameNS(A, 'tbl');
+    for (let t = 0; t < tbls.length; t++){
+      const rows = [];
+      const trs = tbls[t].getElementsByTagNameNS(A, 'tr');
+      for (let r = 0; r < trs.length; r++){
+        const cells = [];
+        const tcs = trs[r].getElementsByTagNameNS(A, 'tc');
+        for (let c = 0; c < tcs.length; c++){
+          const ps = tcs[c].getElementsByTagNameNS(A, 'p');
+          let cell = '';
+          for (let pi = 0; pi < ps.length; pi++){
+            const ts = ps[pi].getElementsByTagNameNS(A, 't');
+            let txt = '';
+            for (let k = 0; k < ts.length; k++) txt += ts[k].textContent;
+            cell += (cell ? ' ' : '') + txt.trim();
+          }
+          cells.push(cell);
+        }
+        rows.push(cells);
+      }
+      if (rows.length) tables.push(opts.gfm ? rowsToGfm(rows) : rowsToHtml(rows));
+    }
+    /* запасной путь: любой оставшийся текст */
+    if (!title && !body.length && !tables.length){
+      const paras = doc.getElementsByTagNameNS(A, 'p');
+      for (let j = 0; j < paras.length; j++){
+        const ts = paras[j].getElementsByTagNameNS(A, 't');
+        let t = '';
+        for (let k = 0; k < ts.length; k++) t += ts[k].textContent;
+        t = t.trim();
+        if (t) body.push({ text: t, lvl: 0 });
+      }
+    }
+    const head = title || ('Слайд ' + (i+1));
+    let out = body.map(l => '  '.repeat(l.lvl) + '- ' + l.text).join('\n');
+    tables.forEach(t => { out += (out ? '\n\n' : '') + t; });
+    const notes = await pptxNotesText(zip, dp, slides[i]);
+    if (notes) out += (out ? '\n\n' : '') + '**Заметки к слайду**\n\n' + notes;
+    parts.push('## ' + head + (out ? '\n\n' + out : ''));
+  }
+  return parts.join('\n\n---\n\n') + '\n';
+}
+
+/* HTML-файл → markdown */
+function htmlToMd(buf, opts){
+  const doc = new DOMParser().parseFromString(decodeText(buf), 'text/html');
+  doc.querySelectorAll('script,style,noscript').forEach(n => n.remove());
+  if (!opts.embedImages) doc.querySelectorAll('img').forEach(n => n.remove());
+  const title = doc.querySelector('title') ? doc.querySelector('title').textContent.trim() : '';
+  let md = makeTurndown(opts.gfm).turndown(doc.body.innerHTML);
+  if (title) md = '# ' + title + '\n\n' + md;
+  return tidy(md);
+}
+
+/* изображения → markdown со встраиванием base64 */
+function imageToMd(file, opts){
+  return new Promise((resolve, reject) => {
+    if (!opts.embedImages)
+      return resolve(`<!-- изображение ${file.name} пропущено (встраивание выключено) -->\n`);
+    const r = new FileReader();
+    r.onload = () => resolve(`![${(file.name || 'изображение').replace(/\.[^.]+$/, '').replace(/[\[\]]/g, '')}](<${r.result}>)\n`);
+    r.onerror = () => reject(fail('Не удалось прочитать изображение.'));
+    r.readAsDataURL(file);
+  });
+}
+
+/* файлы кода → fenced-блок с подсветкой по языку */
+const CODE_LANGS = {
+  js:'javascript', jsx:'javascript', mjs:'javascript', ts:'typescript', tsx:'typescript',
+  py:'python', rb:'ruby', php:'php', java:'java', c:'c', h:'c', cpp:'cpp', cc:'cpp', hpp:'cpp',
+  cs:'csharp', go:'go', rs:'rust', swift:'swift', kt:'kotlin', scala:'scala', sql:'sql',
+  sh:'bash', bash:'bash', zsh:'bash', ps1:'powershell', css:'css', scss:'scss', sass:'sass',
+  less:'less', json:'json', xml:'xml', svg:'xml', yml:'yaml', yaml:'yaml', toml:'toml',
+  ini:'ini', conf:'ini', env:'ini', r:'r', lua:'lua', dart:'dart', vue:'vue', svelte:'svelte',
+  graphql:'graphql', tex:'tex'
+};
+function codeFence(text, lang){
+  if (text.length > 1500000) throw fail('Файл слишком большой для текстового режима (лимит 1,5 МБ).');
+  const fence = text.includes('```') ? '````' : '```';
+  return fence + lang + '\n' + text.replace(/\s+$/,'') + '\n' + fence + '\n';
+}
+
+/* маршрутизатор по расширению */
+const IMAGE_EXT = ['png','jpg','jpeg','gif','webp','bmp','svg','ico','avif','heic'];
+async function convertBuffer(file, opts){
+  const dot = file.name.lastIndexOf('.');
+  const ext = dot === -1 ? '' : file.name.slice(dot + 1).toLowerCase();
+
+  if (IMAGE_EXT.includes(ext) || (file.type || '').startsWith('image/')) return imageToMd(file, opts);
+
+  const buf = await file.arrayBuffer();
+  if (ext === 'docx') return docxToMd(buf, opts);
+  if (ext === 'doc')  throw fail('Старый формат .doc (Word 97–2003) не поддерживается — пересохраните файл как .docx.');
+  if (ext === 'rtf')  throw fail('RTF не поддерживается — пересохраните документ как .docx или .txt.');
+  if (['xlsx','xls','xlsm','xlsb','ods','fods'].includes(ext)){
+    if (typeof XLSX === 'undefined') throw fail('Движок SheetJS не загрузился — проверьте доступ к CDN.');
+    try { return sheetsToMd(XLSX.read(buf, {type:'array'}), opts); }
+    catch(e){ throw fail('Не удалось прочитать таблицу: возможно, файл повреждён или защищён паролем.'); }
+  }
+  if (ext === 'csv' || ext === 'tsv'){
+    if (typeof XLSX === 'undefined') throw fail('Движок SheetJS не загрузился — проверьте доступ к CDN.');
+    try { return sheetsToMd(XLSX.read(decodeText(buf), {type:'string'}), opts); }
+    catch(e){ throw fail('Не удалось разобрать CSV/TSV: файл повреждён.'); }
+  }
+  if (ext === 'pdf')  return pdfToMd(buf);
+  if (ext === 'pptx') return pptxToMd(buf, opts);
+  if (ext === 'ppt')  throw fail('Старый формат .ppt не поддерживается — пересохраните презентацию как .pptx.');
+  if (ext === 'html' || ext === 'htm') return htmlToMd(buf, opts);
+  if (['md','markdown','mdown','mdx'].includes(ext)) return decodeText(buf);
+  if (CODE_LANGS[ext]) return codeFence(decodeText(buf), CODE_LANGS[ext]);
+  if (looksBinary(buf))
+    throw fail(`Формат ${ext ? '.' + ext : 'файла'} не поддерживается. Умею: docx, xlsx, pdf, pptx, csv, html, txt, изображения и исходный код.`);
+  return decodeText(buf);
+}
+
+/* ═══════════════════════ состояние и интерфейс ═══════════════════════ */
+const state = {
+  files: [], activeId: null, view: 'source', pinned: false, seq: 0,
+  opts: { embedImages: true, gfm: true }
+};
+const activeFile = () => state.files.find(f => f.id === state.activeId) || null;
+
+function handleFiles(fileList){
+  const fresh = [];
+  for (const file of fileList){
+    const entry = {
+      id: ++state.seq, file, status: 'working', md: '', error: null,
+      opts: {...state.opts}
+    };
+    if (file.size > 100 * 1048576){
+      entry.status = 'error';
+      entry.error = 'Файл больше 100 МБ — это предел честной конвертации в браузере.';
+    }
+    state.files.push(entry); fresh.push(entry);
+  }
+  if (!fresh.length) return;
+  state.pinned = false;
+  $('workspace').hidden = false;
+  if (state.activeId === null) state.activeId = fresh[0].id;
+  renderQueue(); renderViewer();
+  $('workspace').scrollIntoView({ behavior:'smooth', block:'start' });
+  fresh.forEach(processEntry);
+}
+
+async function processEntry(entry){
+  if (entry.status === 'error'){ renderQueue(); renderViewer(); return; }
+  try {
+    entry.md = await convertBuffer(entry.file, entry.opts);
+    entry.status = 'done';
+  } catch(err){
+    entry.status = 'error';
+    entry.error = (err && err.friendly) ? err.message : 'Внутренняя ошибка разбора — подробности в консоли браузера.';
+    if (!(err && err.friendly)) console.error(err);
+  }
+  renderQueue();
+  const act = activeFile();
+  if (!state.pinned && !(act && act.status === 'done')) setActive(entry.id);
+  else renderViewer();
+}
+
+/* ── очередь ── */
+function renderQueue(){
+  const list = $('queueList');
+  list.textContent = '';
+  $('queueCount').textContent = state.files.length;
+  const done = state.files.filter(f => f.status === 'done').length;
+  $('zipAllBtn').hidden = done < 2;
+
+  if (!state.files.length){
+    const e = document.createElement('div');
+    e.className = 'queue-empty';
+    e.textContent = 'Очередь пуста — добавьте файлы через зону загрузки выше.';
+    list.appendChild(e); return;
+  }
+  state.files.forEach(f => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'q-item' + (f.id === state.activeId ? ' active' : '') + (f.status === 'error' ? ' error' : '');
+    b.title = f.file.name;
+    b.dataset.id = f.id;
+
+    const st = document.createElement('span');
+    st.className = 'q-status ' + f.status;
+    if (f.status === 'working') st.innerHTML = '<span class="spin"></span>';
+    else if (f.status === 'done') st.innerHTML = '<svg class="ic"><use href="#i-check"/></svg>';
+    else st.innerHTML = '<svg class="ic"><use href="#i-x"/></svg>';
+
+    const nm = document.createElement('span');
+    nm.className = 'q-name';
+    nm.textContent = f.file.name;
+
+    const meta = document.createElement('span');
+    meta.className = 'q-meta';
+    const ext = (f.file.name.lastIndexOf('.') !== -1)
+      ? f.file.name.slice(f.file.name.lastIndexOf('.') + 1) : '?';
+    meta.innerHTML = `<span class="q-ext">${escHtml(ext.slice(0,6))}</span><span class="q-size">${formatBytes(f.file.size)}</span>`;
+
+    b.append(st, nm, meta);
+    list.appendChild(b);
+  });
+}
+
+/* ── просмотрщик ── */
+function setActive(id){
+  state.activeId = id;
+  renderQueue(); renderViewer();
+}
+function updateStats(){
+  const f = activeFile();
+  const el = $('vStats');
+  if (!f || f.status !== 'done' || !f.md){ el.textContent = ''; return; }
+  const md = f.md;
+  const words = (md.match(/[\p{L}\p{N}]+/gu) || []).length;
+  const lines = md ? md.split('\n').length : 0;
+  el.textContent = `${md.length.toLocaleString('ru-RU')} симв · ${words.toLocaleString('ru-RU')} слов · ${lines.toLocaleString('ru-RU')} стрк`;
+}
+function renderPreviewInto(root, md){
+  let html;
+  try { html = marked.parse(md); }
+  catch(e){ root.textContent = 'Не удалось отрисовать предпросмотр: ' + e.message; return; }
+  if (window.DOMPurify) html = DOMPurify.sanitize(html, { USE_PROFILES:{ html:true } });
+  else html = html
+    .replace(/<script[\s\S]*?<\/script>/gi,'')
+    .replace(/<style[\s\S]*?<\/style>/gi,'')
+    .replace(/\son\w+\s*=\s*"[^"]*"/gi,'').replace(/\son\w+\s*=\s*'[^']*'/gi,'');
+  root.innerHTML = html;
+  root.querySelectorAll('table').forEach(t => {
+    const w = document.createElement('div'); w.className = 'tbl-wrap';
+    t.replaceWith(w); w.appendChild(t);
+  });
+}
+function renderViewer(){
+  const f = activeFile();
+  const body = $('viewerBody');
+  const ready = !!(f && f.status === 'done');
+  $('copyBtn').disabled = !ready;
+  $('dlBtn').disabled = !ready;
+  $('vName').textContent = f ? outName(f.file) : '—';
+  updateStats();
+  document.querySelectorAll('.seg-btn').forEach(b => b.classList.toggle('active', b.dataset.view === state.view));
+  body.textContent = '';
+
+  if (!f) return;
+  if (f.status === 'working'){
+    const s = document.createElement('div');
+    s.className = 'v-state';
+    s.innerHTML = `<span class="spin" style="width:22px;height:22px;border-width:3px"></span>
+      <p>Конвертирую «${escHtml(f.file.name)}»…</p>`;
+    body.appendChild(s); return;
+  }
+  if (f.status === 'error'){
+    const s = document.createElement('div');
+    s.className = 'v-state v-error';
+    s.innerHTML = `<svg class="big-ic" viewBox="0 0 24 24"><use href="#i-alert"/></svg>
+      <h3>Не получилось</h3><p>${escHtml(f.error)}</p>`;
+    body.appendChild(s); return;
+  }
+  if (state.view === 'preview'){
+    const p = document.createElement('div');
+    p.className = 'prose';
+    renderPreviewInto(p, f.md);
+    body.appendChild(p); return;
+  }
+  const ta = document.createElement('textarea');
+  ta.className = 'v-src';
+  ta.spellcheck = false;
+  ta.value = f.md;
+  ta.setAttribute('aria-label', 'Markdown-разметка, доступна для правки');
+  let statsT;
+  ta.addEventListener('input', () => {
+    f.md = ta.value;
+    clearTimeout(statsT); statsT = setTimeout(updateStats, 300);
+  });
+  ta.addEventListener('keydown', e => {
+    if (e.key === 'Tab'){
+      e.preventDefault();
+      ta.setRangeText('  ', ta.selectionStart, ta.selectionEnd, 'end');
+      f.md = ta.value;
+    }
+  });
+  body.appendChild(ta);
+}
+
+/* ── действия ── */
+async function copyActive(){
+  const f = activeFile();
+  if (!f || f.status !== 'done') return;
+  try { await navigator.clipboard.writeText(f.md); toast('Markdown скопирован в буфер обмена'); }
+  catch(e){
+    const ta = document.createElement('textarea');
+    ta.value = f.md; ta.style.cssText = 'position:fixed;opacity:0';
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); toast('Markdown скопирован в буфер обмена'); }
+    catch(e2){ toast('Браузер не дал доступ к буферу', 'err'); }
+    ta.remove();
+  }
+}
+async function zipAll(){
+  const doneFiles = state.files.filter(f => f.status === 'done');
+  if (doneFiles.length < 2) return;
+  if (typeof JSZip === 'undefined'){ toast('JSZip не загрузился — проверьте доступ к CDN', 'err'); return; }
+  toast('Готовлю архив…', 'info');
+  const zip = new JSZip();
+  const used = {};
+  doneFiles.forEach(f => {
+    let n = outName(f.file);
+    if (used[n]){ const base = n.replace(/\.md$/, ''); let i = 2; while (used[base + ' (' + i + ').md']) i++; n = base + ' (' + i + ').md'; }
+    used[n] = true;
+    zip.file(n, f.md);
+  });
+  const blob = await zip.generateAsync({ type:'blob' });
+  downloadBlob('tomd-markdown.zip', blob);
+  toast(`В архиве файлов: ${doneFiles.length}`);
+}
+function clearAll(){
+  state.files = []; state.activeId = null; state.pinned = false;
+  $('workspace').hidden = true;
+  renderQueue();
+}
+
+/* ═══════════════════════ события ═══════════════════════ */
+const dz = $('dropzone'), input = $('fileInput'), title = $('dropTitle');
+
+input.addEventListener('click', e => e.stopPropagation());
+
+function openPicker(){
+  try { input.click(); }
+  catch(err){
+    toast('Диалог выбора файлов заблокирован средой — откройте страницу напрямую во вкладке браузера', 'err');
+  }
+}
+dz.addEventListener('click', openPicker);
+input.addEventListener('change', () => { if (input.files.length) handleFiles(input.files); input.value = ''; });
+
+/* drag & drop на всю страницу */
+let dragDepth = 0;
+const dtHasFiles = e => e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files');
+function setDragging(on){
+  document.body.classList.toggle('dragging', on);
+  title.textContent = on ? 'Отпустите файлы' : 'Перетащите файлы сюда';
+}
+window.addEventListener('dragenter', e => { if (dtHasFiles(e)){ e.preventDefault(); if (!dragDepth) setDragging(true); dragDepth++; } });
+window.addEventListener('dragleave', e => { if (dtHasFiles(e)){ dragDepth = Math.max(0, dragDepth - 1); if (!dragDepth) setDragging(false); } });
+window.addEventListener('dragover', e => { if (dtHasFiles(e)) e.preventDefault(); });
+window.addEventListener('drop', e => {
+  e.preventDefault(); dragDepth = 0; setDragging(false);
+  if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files);
+});
+
+/* вставка из буфера: файлы, скриншоты, обычный текст */
+function normalizeClipboardFile(f){
+  if (f.name && f.name.includes('.')) return f;
+  const d = new Date();
+  const stamp = [pad2(d.getHours()), pad2(d.getMinutes()), pad2(d.getSeconds())].join('-');
+  const m = (f.type || '').match(/^image\/([a-z0-9.+-]+)/i);
+  const ext = m ? m[1].replace('jpeg', 'jpg') : 'bin';
+  return new File([f], `${m ? 'изображение' : 'файл'}-${stamp}.${ext}`, { type: f.type });
+}
+window.addEventListener('paste', e => {
+  const cd = e.clipboardData;
+  if (!cd) return;
+  const t = e.target;
+  if (t && (t.tagName === 'TEXTAREA' || t.tagName === 'INPUT' || t.isContentEditable)) return;
+
+  const files = [];
+  if (cd.items){
+    for (let i = 0; i < cd.items.length; i++){
+      if (cd.items[i].kind === 'file'){
+        const f = cd.items[i].getAsFile();
+        if (f) files.push(normalizeClipboardFile(f));
+      }
+    }
+  }
+  if (!files.length && cd.files){
+    for (let i = 0; i < cd.files.length; i++) files.push(normalizeClipboardFile(cd.files[i]));
+  }
+  if (files.length){
+    e.preventDefault();
+    handleFiles(files);
+    toast('Из буфера добавлено файлов: ' + files.length, 'info');
+    return;
+  }
+  const text = cd.getData('text/plain');
+  if (text && text.trim()){
+    e.preventDefault();
+    const d = new Date();
+    const stamp = [pad2(d.getHours()), pad2(d.getMinutes()), pad2(d.getSeconds())].join('-');
+    handleFiles([new File([text], `вставка-${stamp}.txt`, { type: 'text/plain' })]);
+    toast('Текст из буфера добавлен как файл', 'info');
+  }
+});
+
+/* очередь: делегированный клик */
+ $('queueList').addEventListener('click', e => {
+  const item = e.target.closest('.q-item');
+  if (!item) return;
+  state.pinned = true;
+  setActive(Number(item.dataset.id));
+});
+ $('zipAllBtn').addEventListener('click', zipAll);
+ $('clearBtn').addEventListener('click', clearAll);
+
+/* переключатель разметка/предпросмотр */
+document.querySelectorAll('.seg-btn').forEach(b => b.addEventListener('click', () => {
+  state.view = b.dataset.view;
+  renderViewer();
+}));
+
+ $('copyBtn').addEventListener('click', copyActive);
+ $('dlBtn').addEventListener('click', () => {
+  const f = activeFile();
+  if (!f || f.status !== 'done') return;
+  downloadText(outName(f.file), f.md);
+  toast('Файл ' + outName(f.file) + ' скачан');
+});
+
+/* тумблеры параметров */
+ $('optImages').addEventListener('change', e => {
+  state.opts.embedImages = e.target.checked;
+  toast('Встраивание изображений: ' + (e.target.checked ? 'вкл' : 'выкл') + ' — применюсь к новым файлам', 'info');
+});
+ $('optGfm').addEventListener('change', e => {
+  state.opts.gfm = e.target.checked;
+  toast('Таблицы: ' + (e.target.checked ? 'GitHub (GFM)' : 'HTML-блоки') + ' — применюсь к новым файлам', 'info');
+});
+
+/* Ctrl/Cmd+S — скачать активный файл */
+window.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's'){
+    e.preventDefault();
+    const f = activeFile();
+    if (f && f.status === 'done'){ downloadText(outName(f.file), f.md); toast('Файл ' + outName(f.file) + ' скачан'); }
+    else toast('Пока нечего скачивать', 'info');
+  }
+});
+</script>
+</body>
+</html>
