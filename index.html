@@ -13,15 +13,14 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Lora:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
-<!-- Локальные движки: defer — страница рисуется до загрузки библиотек.
-     Библиотеки используются только по действию пользователя; SRI-хэши добавьте по инструкции из ответа. -->
-<script defer crossorigin="anonymous" src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-<script defer crossorigin="anonymous" src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
-<script defer crossorigin="anonymous" src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-<script defer crossorigin="anonymous" src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-<script defer crossorigin="anonymous" src="https://cdnjs.cloudflare.com/ajax/libs/turndown/7.1.2/turndown.js"></script>
-<script defer crossorigin="anonymous" src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
-<script defer crossorigin="anonymous" src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
+<!-- defer: страница рисуется до загрузки библиотек. Если добавите integrity (SRI) — верните crossorigin="anonymous" в каждый тег. -->
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+<script defer src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/turndown/7.1.2/turndown.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
 <style>
 :root{
   --paper:#F5F1E8; --panel:#FDFCF7; --ink:#1C1917; --ink-2:#57534E; --ink-3:#6E675C;
@@ -60,7 +59,7 @@ button{font-family:inherit}
 
 /* ── hero ──────────────────────────────── */
 .hero{margin-bottom:30px}
-.hero-title{font:600 clamp(36px,6vw,60px)/1.06 var(--sans);letter-spacing:-.03em}
+.hero-title{font:600 clamp(36px,6vw,60px)/1.06 var(--sans);letter-spacing:-.03em;overflow-wrap:anywhere}
 .u-word{position:relative;white-space:nowrap}
 .u-word svg{position:absolute;left:0;bottom:-.1em;width:100%;height:.17em;overflow:visible}
 .u-word path{fill:none;stroke:var(--accent);stroke-width:6.5;stroke-linecap:round;
@@ -76,6 +75,7 @@ button{font-family:inherit}
 .dropzone{position:relative;border:1.5px solid var(--ink);background:rgba(253,252,247,.6);
   padding:50px 24px 36px;text-align:center;cursor:pointer;transition:background .18s,border-color .18s}
 .drop-inner{display:flex;flex-direction:column;align-items:center;gap:16px}
+.drop-inner>*{max-width:100%}
 .drop-glyph{width:46px;height:46px;fill:none;stroke:var(--ink);stroke-width:2;stroke-linecap:round;stroke-linejoin:round;transition:stroke .18s}
 .drop-glyph .glyph-arrow{animation:bob 2.6s ease-in-out infinite}
 @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(4px)}}
@@ -87,7 +87,7 @@ button{font-family:inherit}
 .drop-formats span{white-space:nowrap}
 .drop-formats i{font-style:normal;color:var(--line-2);margin:0 7px}
 .drop-privacy{display:inline-flex;align-items:center;gap:8px;margin-top:14px;
-  font:500 11.5px var(--mono);color:var(--ink-2);max-width:60ch}
+  font:500 11.5px var(--mono);color:var(--ink-2);max-width:60ch;text-align:left}
 .drop-privacy .ic{width:14px;height:14px;stroke:var(--ok);flex:none}
 .crop{position:absolute;width:15px;height:15px;pointer-events:none;transition:transform .2s,border-color .2s}
 .crop.tl{top:-9px;left:-9px;border-top:2px solid var(--ink);border-left:2px solid var(--ink)}
@@ -157,7 +157,7 @@ body.dragging .dropzone .drop-glyph{stroke:var(--accent)}
 .q-ext{font:700 9.5px var(--mono);text-transform:uppercase;letter-spacing:.06em;color:var(--ink-2);border:1px solid var(--line-2);padding:2px 5px}
 .q-size{font:400 10.5px var(--mono);color:var(--ink-3)}
 .q-acts{display:flex;align-items:center;flex:none}
-.q-act{display:flex;align-items:center;justify-content:center;width:32px;border:0;background:none;color:var(--ink-3);cursor:pointer;transition:color .12s}
+.q-act{display:flex;align-items:center;justify-content:center;width:32px;height:44px;border:0;background:none;color:var(--ink-3);cursor:pointer;transition:color .12s}
 .q-act:hover{color:var(--accent-deep)}
 .q-act .ic{width:13px;height:13px}
 .spin{width:13px;height:13px;border:2px solid var(--line-2);border-top-color:var(--accent);border-radius:50%;animation:rot .7s linear infinite}
@@ -234,13 +234,16 @@ footer .wrap{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;
 }
 @media (max-width:640px){
   main.wrap{padding:28px 16px 16px}
+  .site-head .wrap{flex-wrap:wrap;gap:6px 16px}
   .hero-title{font-size:clamp(30px,9vw,44px)}
+  .hero-title br{display:none}           /* заголовок переносится по словам, не вылезает */
   .dropzone{padding:34px 14px 24px}
   .drop-title{font-size:19px}
-  .drop-formats{font-size:11px}
-  .drop-privacy{font-size:10.5px}
+  .drop-formats{display:flex;flex-wrap:wrap;justify-content:center;gap:4px 10px;letter-spacing:0}
+  .drop-formats i{display:none}          /* строка форматов переносится, точки-разделители скрыты */
+  .drop-privacy{max-width:100%}
   .queue-list{max-height:200px}
-  .v-src{font-size:16px;padding:16px}
+  .v-src{font-size:16px;padding:16px}    /* 16px — iOS не зумит при фокусе */
   .prose{font-size:15.5px;padding:20px}
   .v-stats{font-size:10px}
   .viewer-bar{gap:10px;padding:10px 12px}
@@ -249,9 +252,8 @@ footer .wrap{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;
   .q-act{width:40px}
   .mini-btn{padding:8px 9px}
 }
-/* на сенсорных устройствах: без Ctrl+V-подсказки, шрифт редактора 16px (иначе iOS зумит при фокусе) */
 @media (pointer:coarse){
-  .drop-alt{display:none}
+  .drop-alt{display:none}                /* на тач-устройствах подсказка Ctrl+V не нужна */
   .v-src{font-size:16px}
 }
 @media (prefers-reduced-motion:reduce){
@@ -368,7 +370,7 @@ const escHtml = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replac
   .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 const fail = msg => { const e = new Error(msg); e.friendly = true; return e; };
 const pad2 = n => String(n).padStart(2, '0');
-const yieldUI = () => new Promise(r => setTimeout(r, 0)); /* точка уступки главному потоку */
+const yieldUI = () => new Promise(r => setTimeout(r, 0)); /* точка уступки: страница дышит между листами/страницами/слайдами */
 
 const MAX_FILE_BYTES   = 100 * 1048576; /* sync: текст «лимит — 100 МБ» в HTML */
 const MAX_TABLE_ROWS   = 1500;
@@ -381,6 +383,8 @@ const SNIFF_BYTES      = 4096;
 const MAX_ZIP_ENTRIES  = 2000;
 const MAX_ZIP_FILE     = 32 * 1048576;
 const MAX_ZIP_TOTAL    = 256 * 1048576;
+const QUEUE_MAX        = 2;        /* одновременно конвертируются не больше двух файлов */
+const WATCHDOG_MS      = 180000;   /* страховка: зависшая конвертация честно помечается ошибкой через 3 минуты */
 
 const NS_REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
 const NS_A   = 'http://schemas.openxmlformats.org/drawingml/2006/main';
@@ -409,7 +413,7 @@ function decodeText(buf){
 function splitExt(name){
   const dot = name.lastIndexOf('.');
   if (dot === -1) return { ext: '', base: name };
-  if (dot === 0)  return { ext: name.slice(1).toLowerCase(), base: '' }; /* .env и иные dot-файлы */
+  if (dot === 0)  return { ext: name.slice(1).toLowerCase(), base: '' };
   return { ext: name.slice(dot + 1).toLowerCase(), base: name.slice(0, dot) };
 }
 function formatBytes(b){
@@ -419,10 +423,10 @@ function formatBytes(b){
 }
 function outName(file){
   const { ext, base } = splitExt(file.name);
-  if (!ext || base === '') return file.name + '.md'; /* «.env» → «.env.md», а не «.md» */
+  if (!ext || base === '') return file.name + '.md';
   return base + '.md';
 }
-/* нормализация NBSP и пустых строк — только ВНЕ code-fence (внутри — байт-в-байт) */
+/* нормализация NBSP и пустых строк — только ВНЕ code-fence */
 function tidy(md){
   const lines = md.split('\n');
   const out = [];
@@ -449,7 +453,6 @@ function tidy(md){
   while (out.length && out[out.length - 1].trim() === '') out.pop();
   return out.join('\n') + '\n';
 }
-/* UTF-16 BOM = текст; прочее смотрим на нулевые байты */
 function looksBinary(buf){
   const u8 = new Uint8Array(buf);
   if (u8.length >= 2 && ((u8[0] === 0xFF && u8[1] === 0xFE) || (u8[0] === 0xFE && u8[1] === 0xFF))) return false;
@@ -466,7 +469,7 @@ function downloadBlob(name, blob){
 }
 const downloadText = (name, text) => downloadBlob(name, new Blob([text], {type:'text/markdown;charset=utf-8'}));
 
-/* тосты: озвучиваются скринридером, закрываются кнопкой; ошибки живут 6 с */
+/* тосты */
 function toast(msg, type = 'ok'){
   const icons = {ok:'i-check', err:'i-x', info:'i-info'};
   const el = document.createElement('div');
@@ -481,7 +484,6 @@ function toast(msg, type = 'ok'){
 }
 
 /* ═══════════════════════ таблицы ═══════════════════════ */
-/* ячейка: экранируем \, |, `, <, > — иначе «a\|b» рвёт таблицу, ``` глотает её, <img> инъектируется */
 function rowsToGfm(rows){
   if (!rows.length) return '';
   const norm = s => {
@@ -493,7 +495,7 @@ function rowsToGfm(rows){
       .replace(/`/g, '\\`')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
-      .replace(/\r?\n/g, '<br>'); /* GFM рендерит <br> внутри ячеек */
+      .replace(/\r?\n/g, '<br>');
   };
   const width = Math.max(1, ...rows.map(r => r.length));
   const pad = cells => {
@@ -510,7 +512,6 @@ function rowsToHtml(rows){
   rows.slice(1).forEach(r => { h += '    <tr>' + r.map(c => '<td>' + escHtml(c) + '</td>').join('') + '</tr>\n'; });
   return h + '  </tbody>\n</table>';
 }
-/* лёгкое экранирование для inline-текста (заголовки, имена листов, текст PDF/PPTX) */
 const mdInline = s => String(s)
   .replace(/[\x00-\x1f\x7f]+/g, ' ')
   .replace(/</g, '&lt;')
@@ -518,7 +519,6 @@ const mdInline = s => String(s)
 
 /* ═══════════════════════ turndown: HTML → Markdown ═══════════════════════ */
 function tableNodeToMarkdown(table, gfm){
-  /* только строки ЭТОЙ таблицы (вложенные не размазываем) */
   const trs = Array.from(table.querySelectorAll('tr')).filter(tr => tr.closest('table') === table);
   if (!trs.length) return '';
   if (!gfm){
@@ -547,7 +547,6 @@ function makeTurndown(gfm){
     filter: node => node.nodeName === 'TABLE',
     replacement: (c, node) => tableNodeToMarkdown(node, gfm)
   });
-  /* фильтры turndown — в нижнем регистре, как у встроенных правил (аудит A4-14 прав) */
   ['thead','tbody','tfoot','tr','th','td'].forEach(tag =>
     td.addRule('tbl-skip-' + tag, { filter: tag, replacement: () => '' }));
   return td;
@@ -561,40 +560,41 @@ async function docxToMd(buf, opts){
   let html;
   try { html = (await mammoth.convertToHtml({ arrayBuffer: buf })).value; }
   catch(e){ throw fail('Не удалось прочитать .docx: файл повреждён или это старый формат — пересохраните как .docx.'); }
-  /* вырезаем <img> после конвертации: предсказуемо и не зависит от версии API mammoth */
   if (!opts.embedImages) html = html.replace(/<img[^>]*>/g, '');
   return tidy(makeTurndown(opts.gfm).turndown(html));
 }
 
-/* Excel / CSV */
-function sheetsToMd(wb, opts){
+/* Excel / CSV — теперь async: уступка и живой прогресс перед каждым листом */
+async function sheetsToMd(wb, opts){
   const names = wb.SheetNames.slice(0, MAX_SHEETS);
   const multi = names.length > 1;
   const parts = [];
-  names.forEach(name => {
+  for (let i = 0; i < names.length; i++){
+    const name = names[i];
     if (opts.isCancelled && opts.isCancelled()) throw fail('Конвертация отменена');
+    if (opts.onProgress) opts.onProgress(`Лист ${i + 1} из ${names.length}`);
+    await yieldUI();
     const rows = XLSX.utils.sheet_to_json(wb.Sheets[name], { header:1, raw:false, defval:'' });
     while (rows.length && rows[rows.length-1].every(c => String(c).trim() === '')) rows.pop();
     while (rows.length && rows[0].every(c => String(c).trim() === '')) rows.shift();
-    if (!rows.length){ if (multi) parts.push(`## ${mdInline(name)}\n\n<!-- пустой лист -->`); return; }
+    if (!rows.length){ if (multi) parts.push(`## ${mdInline(name)}\n\n<!-- пустой лист -->`); continue; }
     const shown = rows.slice(0, MAX_TABLE_ROWS);
     let part = (multi ? `## ${mdInline(name)}\n\n` : '') + (opts.gfm ? rowsToGfm(shown) : rowsToHtml(shown));
     if (rows.length > MAX_TABLE_ROWS) part += `\n\n<!-- показаны первые ${MAX_TABLE_ROWS} строк из ${rows.length} -->`;
     parts.push(part);
-  });
+  }
   let md = parts.join('\n\n---\n\n');
   if (!md) md = '<!-- в файле нет данных -->';
   if (wb.SheetNames.length > MAX_SHEETS) md += `\n\n<!-- показаны первые ${MAX_SHEETS} листов из ${wb.SheetNames.length} -->`;
   return md + '\n';
 }
 
-/* PDF: строки по координатам, заголовки по кеглю, отмена и уступки постранично */
+/* PDF: постраничный прогресс, отмена, page.cleanup(), без хранения parts */
 async function pdfToMd(buf, opts){
   requireEngine('pdfjs', 'PDF');
   pdfjsLib.GlobalWorkerOptions.workerSrc =
     'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
   let pdf;
-  /* isEvalSupported:false + disableFontFace:true — митиация CVE-2024-4367 (мы извлекаем только текст) */
   try { pdf = await pdfjsLib.getDocument({ data: buf, isEvalSupported: false, disableFontFace: true }).promise; }
   catch(e){
     if (e && e.name === 'PasswordException') throw fail('PDF защищён паролем — снимите защиту и попробуйте снова.');
@@ -607,6 +607,7 @@ async function pdfToMd(buf, opts){
 
   for (let p = 1; p <= count; p++){
     if (opts.isCancelled && opts.isCancelled()) throw fail('Конвертация отменена');
+    if (opts.onProgress) opts.onProgress(`Страница ${p} из ${count}`);
     const page = await pdf.getPage(p);
     const tc = await page.getTextContent();
     const its = [];
@@ -633,7 +634,7 @@ async function pdfToMd(buf, opts){
         text += pt.str; prev = pt;
       }
       L.text = text.replace(/\s+/g, ' ').trim();
-      delete L.parts; /* память: не храним фрагменты после сборки строки */
+      delete L.parts;
       if (L.text) allHeights.push(L.h);
     }
     pages.push(lines);
@@ -675,7 +676,7 @@ async function pdfToMd(buf, opts){
   return md + '\n';
 }
 
-/* PowerPoint: заметки докладчика через .rels (учитываем и абсолютные Target) */
+/* PowerPoint: заметки докладчика через .rels (включая абсолютные Target) */
 async function pptxNotesText(zip, dp, readXml, slidePath){
   try{
     const relPath = slidePath.replace(/^ppt\/slides\//, 'ppt/slides/_rels/') + '.rels';
@@ -709,13 +710,12 @@ async function pptxNotesText(zip, dp, readXml, slidePath){
   } catch(e){ return ''; }
 }
 
-/* PowerPoint (.pptx) */
+/* PowerPoint (.pptx): послайдовый прогресс + защита от zip-бомб */
 async function pptxToMd(buf, opts){
   requireEngine('jszip', 'JSZip');
   let zip;
   try { zip = await JSZip.loadAsync(buf); }
   catch(e){ throw fail('Не удалось открыть .pptx: файл повреждён или защищён паролем.'); }
-  /* защита от zip-бомб */
   const entryNames = Object.keys(zip.files);
   if (entryNames.length > MAX_ZIP_ENTRIES)
     throw fail('В архиве слишком много записей — возможно, это zip-бомба.');
@@ -726,15 +726,17 @@ async function pptxToMd(buf, opts){
       throw fail('Архив слишком велик при распаковке — возможно, это zip-бомба.');
     return new TextDecoder().decode(u8);
   };
-  const slides = entryNames
+  const allSlides = entryNames
     .filter(n => /^ppt\/slides\/slide\d+\.xml$/.test(n))
-    .sort((a,b) => parseInt(a.match(/(\d+)/)[1],10) - parseInt(b.match(/(\d+)/)[1],10))
-    .slice(0, MAX_SLIDES);
+    .sort((a,b) => parseInt(a.match(/(\d+)/)[1],10) - parseInt(b.match(/(\d+)/)[1],10));
+  const slides = allSlides.slice(0, MAX_SLIDES);
   if (!slides.length) throw fail('В файле не нашлось слайдов — возможно, он повреждён.');
   const dp = new DOMParser();
   const parts = [];
   for (let i = 0; i < slides.length; i++){
     if (opts.isCancelled && opts.isCancelled()) throw fail('Конвертация отменена');
+    if (opts.onProgress) opts.onProgress(`Слайд ${i + 1} из ${slides.length}`);
+    await yieldUI();
     let doc;
     try { doc = dp.parseFromString(await readXml(slides[i]), 'application/xml'); }
     catch(e){ throw fail('Слайд ' + (i+1) + ' не читается — файл повреждён.'); }
@@ -743,7 +745,6 @@ async function pptxToMd(buf, opts){
     for (let s = 0; s < sps.length; s++){
       const ph = sps[s].getElementsByTagNameNS(NS_P, 'ph')[0];
       const type = ph ? (ph.getAttribute('type') || 'body') : 'body';
-      /* служебные плейсхолдеры (номер слайда, дата, колонтитулы) не превращаем в пункты списка */
       if (['sldNum','dt','ftr','hdr'].includes(type)) continue;
       const spLines = [];
       const paras = sps[s].getElementsByTagNameNS(NS_A, 'p');
@@ -760,7 +761,6 @@ async function pptxToMd(buf, opts){
       if (type === 'title' || type === 'ctrTitle') title = spLines.map(l => l.text).join(' ');
       else spLines.forEach(l => body.push(l));
     }
-    /* таблицы на слайдах (ячейки экранируются внутри rowsToGfm/rowsToHtml) */
     const tbls = doc.getElementsByTagNameNS(NS_A, 'tbl');
     for (let t = 0; t < tbls.length; t++){
       const rows = [];
@@ -783,7 +783,6 @@ async function pptxToMd(buf, opts){
       }
       if (rows.length) tables.push(opts.gfm ? rowsToGfm(rows) : rowsToHtml(rows));
     }
-    /* запасной путь: любой оставшийся текст */
     if (!title && !body.length && !tables.length){
       const paras = doc.getElementsByTagNameNS(NS_A, 'p');
       for (let j = 0; j < paras.length; j++){
@@ -800,11 +799,10 @@ async function pptxToMd(buf, opts){
     const notes = await pptxNotesText(zip, dp, readXml, slides[i]);
     if (notes) out += (out ? '\n\n' : '') + '**Заметки к слайду**\n\n' + notes;
     parts.push('## ' + head + (out ? '\n\n' + out : ''));
-    await yieldUI();
   }
-  if (slides.length && entryNames.filter(n => /^ppt\/slides\/slide\d+\.xml$/.test(n)).length > MAX_SLIDES)
-    return parts.join('\n\n---\n\n') + `\n\n<!-- показаны первые ${MAX_SLIDES} слайдов -->\n`;
-  return parts.join('\n\n---\n\n') + '\n';
+  let md = parts.join('\n\n---\n\n');
+  if (allSlides.length > MAX_SLIDES) md += `\n\n<!-- показаны первые ${MAX_SLIDES} слайдов из ${allSlides.length} -->`;
+  return md + '\n';
 }
 
 /* HTML-файл → markdown */
@@ -818,7 +816,7 @@ function htmlToMd(buf, opts){
   return tidy(md);
 }
 
-/* изображения → markdown (крупные не встраиваем — спасаем память вкладки) */
+/* изображения */
 function imageToMd(file, opts){
   return new Promise((resolve, reject) => {
     const alt = (file.name || 'image')
@@ -837,7 +835,7 @@ function imageToMd(file, opts){
   });
 }
 
-/* файлы кода → fenced-блок (длина ограждения больше любой серии бэктиков внутри) */
+/* код → fenced-блок */
 function codeFence(text, lang){
   if (text.length > MAX_TEXT_CHARS) throw fail('Файл слишком большой для текстового режима (лимит 1,5 МБ).');
   const runs = text.match(/`+/g) || [];
@@ -857,7 +855,7 @@ const CODE_LANGS = {
 };
 const IMAGE_EXT = ['png','jpg','jpeg','gif','webp','bmp','svg','ico','avif','heic'];
 
-/* маршрутизатор по расширению */
+/* маршрутизатор */
 async function convertBuffer(file, opts){
   if (opts.isCancelled && opts.isCancelled()) throw fail('Конвертация отменена');
   const { ext } = splitExt(file.name);
@@ -872,12 +870,12 @@ async function convertBuffer(file, opts){
   if (ext === 'rtf')  throw fail('RTF не поддерживается — пересохраните документ как .docx или .txt.');
   if (['xlsx','xls','xlsm','xlsb','ods','fods'].includes(ext)){
     requireEngine('xlsx', 'SheetJS');
-    try { return sheetsToMd(XLSX.read(buf, {type:'array'}), opts); }
+    try { return await sheetsToMd(XLSX.read(buf, {type:'array'}), opts); }
     catch(e){ throw (e && e.friendly) ? e : fail('Не удалось прочитать таблицу: возможно, файл повреждён или защищён паролем.'); }
   }
   if (ext === 'csv' || ext === 'tsv'){
     requireEngine('xlsx', 'SheetJS');
-    try { return sheetsToMd(XLSX.read(decodeText(buf), {type:'string'}), opts); }
+    try { return await sheetsToMd(XLSX.read(decodeText(buf), {type:'string'}), opts); }
     catch(e){ throw fail('Не удалось разобрать CSV/TSV: файл повреждён.'); }
   }
   if (ext === 'pdf')  return pdfToMd(buf, opts);
@@ -902,8 +900,7 @@ const state = {
   files: [], activeId: null, view: 'source', pinned: false, seq: 0,
   opts: { embedImages: true, gfm: true }
 };
-/* очередь конвертации: не больше двух одновременно, с возможностью отмены */
-const queue = { pending: [], running: 0, MAX: 2 };
+const queue = { pending: [], running: 0, MAX: QUEUE_MAX };
 const activeFile = () => state.files.find(f => f.id === state.activeId) || null;
 let statsT;
 
@@ -911,13 +908,21 @@ function makeOpts(entry){
   return {
     embedImages: state.opts.embedImages,
     gfm: state.opts.gfm,
-    isCancelled: () => entry.cancelled === true
+    isCancelled: () => entry.cancelled === true,
+    onProgress: msg => {
+      entry.progress = msg;
+      if (state.activeId === entry.id){
+        const el = document.getElementById('workMsg');
+        if (el) el.textContent = msg;   /* живой прогресс без перерисовки всего экрана */
+      }
+    }
   };
 }
 function enqueue(entry){ queue.pending.push(entry); pump(); }
 function pump(){
   while (queue.running < queue.MAX && queue.pending.length){
     const entry = queue.pending.shift();
+    entry.started = true;
     queue.running++;
     processEntry(entry);
   }
@@ -927,7 +932,8 @@ function handleFiles(fileList){
   const fresh = [];
   for (const file of fileList){
     const entry = { id: ++state.seq, file, status: 'working', md: '', error: null,
-                    cancelled: false, edited: false, cursor: null, opts: null };
+                    cancelled: false, edited: false, cursor: null, rowEl: null,
+                    started: false, progress: null, opts: null };
     entry.opts = makeOpts(entry);
     if (file.size > MAX_FILE_BYTES){
       entry.status = 'error';
@@ -936,30 +942,41 @@ function handleFiles(fileList){
     state.files.push(entry); fresh.push(entry);
   }
   if (!fresh.length) return;
+  /* фикс: фокус всегда на первом новом файле — просмотрщик не залипает на старом */
   state.pinned = false;
-  if (state.activeId === null || !state.files.some(f => f.id === state.activeId))
-    state.activeId = fresh[0].id;
+  state.activeId = fresh[0].id;
   updateUI();
   $('workspace').scrollIntoView({ behavior:'smooth', block:'start' });
-  fresh.forEach(e => { if (e.status !== 'error') enqueue(e); });
+  fresh.forEach(e => { if (e.status !== 'error') enqueue(e); else refreshRow(e); });
 }
 
 async function processEntry(entry){
+  /* watchdog: если конвертация зависла — через 3 минуты честная ошибка вместо вечного спиннера */
+  const timeoutP = new Promise((_, reject) => {
+    entry._wdT = setTimeout(() => {
+      entry.cancelled = true;
+      reject(fail('Конвертация прервана: она заняла больше 3 минут — вероятно, файл слишком сложен для этого устройства.'));
+    }, WATCHDOG_MS);
+  });
   try {
-    entry.md = await convertBuffer(entry.file, entry.opts);
+    entry.md = await Promise.race([convertBuffer(entry.file, entry.opts), timeoutP]);
     entry.status = 'done';
   } catch(err){
     entry.status = 'error';
     entry.error = (err && err.friendly) ? err.message : 'Внутренняя ошибка разбора — подробности в консоли браузера.';
     if (!(err && err.friendly)) console.error(err);
   } finally {
+    clearTimeout(entry._wdT);
     queue.running--;
     pump();
   }
-  if (!state.files.includes(entry)) return; /* файл удалили/очистили, пока шла конвертация */
-  if (!state.pinned && !(activeFile() && activeFile().status === 'done'))
-    state.activeId = entry.id;
-  updateUI();
+  if (!state.files.includes(entry)) return;   /* файл удалили/очистили, пока шла конвертация */
+  /* фикс: точечное обновление строки очереди вместо полной пересборки (стресс 20+ файлов) */
+  refreshRow(entry);
+  updateQueueChrome();
+  const act = activeFile();
+  if (!state.pinned && !(act && act.status === 'done')) state.activeId = entry.id;
+  if (state.activeId === entry.id) renderViewer();
 }
 
 function updateUI(){
@@ -989,84 +1006,103 @@ function retryEntry(id){
   if (!f || f.status !== 'error') return;
   f.status = 'working'; f.error = null; f.md = '';
   f.cancelled = false; f.edited = false; f.cursor = null;
+  f.started = false; f.progress = null;
   f.opts = makeOpts(f);
   enqueue(f);
   updateUI();
 }
 
-/* ── очередь ── */
+/* ── очередь: полная пересборка только при добавлении/удалении ── */
+const STATUS_NAMES = { working: 'Обрабатывается', done: 'Готово', error: 'Ошибка' };
+function buildRow(f){
+  const row = document.createElement('div');
+  row.className = 'q-row' + (f.id === state.activeId ? ' active' : '');
+
+  const main = document.createElement('button');
+  main.type = 'button';
+  main.className = 'q-item' + (f.status === 'error' ? ' error' : '');
+  main.dataset.id = f.id;
+  main.title = f.file.name + ' — ' + STATUS_NAMES[f.status];
+
+  const st = document.createElement('span');
+  st.className = 'q-status ' + f.status;
+  st.setAttribute('role', 'img');
+  st.setAttribute('aria-label', STATUS_NAMES[f.status]);
+  if (f.status === 'working') st.innerHTML = '<span class="spin"></span>';
+  else if (f.status === 'done') st.innerHTML = '<svg class="ic" aria-hidden="true" focusable="false"><use href="#i-check"/></svg>';
+  else st.innerHTML = '<svg class="ic" aria-hidden="true" focusable="false"><use href="#i-x"/></svg>';
+
+  const nm = document.createElement('span');
+  nm.className = 'q-name';
+  nm.textContent = f.file.name;
+
+  const meta = document.createElement('span');
+  meta.className = 'q-meta';
+  const { ext } = splitExt(f.file.name);
+  meta.innerHTML = `<span class="q-ext">${escHtml((ext || '?').slice(0,6))}</span><span class="q-size">${formatBytes(f.file.size)}</span>`;
+
+  main.append(st, nm, meta);
+
+  const acts = document.createElement('span');
+  acts.className = 'q-acts';
+  if (f.status === 'error'){
+    const rb = document.createElement('button');
+    rb.type = 'button';
+    rb.className = 'q-act';
+    rb.dataset.retry = f.id;
+    rb.title = 'Повторить';
+    rb.setAttribute('aria-label', 'Повторить конвертацию: ' + f.file.name);
+    rb.innerHTML = '<svg class="ic" aria-hidden="true" focusable="false"><use href="#i-retry"/></svg>';
+    acts.appendChild(rb);
+  }
+  const db = document.createElement('button');
+  db.type = 'button';
+  db.className = 'q-act';
+  db.dataset.del = f.id;
+  db.title = 'Удалить из очереди';
+  db.setAttribute('aria-label', 'Удалить из очереди: ' + f.file.name);
+  db.innerHTML = '<svg class="ic" aria-hidden="true" focusable="false"><use href="#i-trash"/></svg>';
+  acts.appendChild(db);
+
+  row.append(main, acts);
+  return row;
+}
+function refreshRow(entry){
+  if (!entry.rowEl || !entry.rowEl.isConnected) return;
+  const fresh = buildRow(entry);
+  entry.rowEl.replaceWith(fresh);
+  entry.rowEl = fresh;
+}
+function updateQueueChrome(){
+  const total = state.files.length;
+  let done = 0, errored = 0, working = 0;
+  state.files.forEach(f => {
+    if (f.status === 'done') done++;
+    else if (f.status === 'error') errored++;
+    else working++;
+  });
+  $('queueCount').textContent = total;
+  $('zipAllBtn').hidden = done < 2;
+  $('cancelBtn').hidden = working === 0;
+  $('reconvertBtn').hidden = !(done || errored);
+  $('queueProgress').textContent = total ? `Обработано ${done + errored} из ${total}` : '';
+}
 function renderQueue(){
   const list = $('queueList');
   list.textContent = '';
-  $('queueCount').textContent = state.files.length;
-  const done = state.files.filter(f => f.status === 'done').length;
-  const errored = state.files.filter(f => f.status === 'error').length;
-  $('zipAllBtn').hidden = done < 2;
-  $('cancelBtn').hidden = !state.files.some(f => f.status === 'working');
-  $('reconvertBtn').hidden = !(done || errored);
-  $('queueProgress').textContent = state.files.length
-    ? `Обработано ${done + errored} из ${state.files.length}` : '';
-
   if (!state.files.length){
     const e = document.createElement('div');
     e.className = 'queue-empty';
     e.textContent = 'Очередь пуста — добавьте файлы через зону загрузки выше.';
-    list.appendChild(e); return;
+    list.appendChild(e);
+  } else {
+    state.files.forEach(f => {
+      const row = buildRow(f);
+      f.rowEl = row;
+      list.appendChild(row);
+    });
   }
-  const statusNames = { working: 'Обрабатывается', done: 'Готово', error: 'Ошибка' };
-  state.files.forEach(f => {
-    const row = document.createElement('div');
-    row.className = 'q-row' + (f.id === state.activeId ? ' active' : '');
-
-    const main = document.createElement('button');
-    main.type = 'button';
-    main.className = 'q-item' + (f.status === 'error' ? ' error' : '');
-    main.dataset.id = f.id;
-    main.title = f.file.name + ' — ' + statusNames[f.status];
-
-    const st = document.createElement('span');
-    st.className = 'q-status ' + f.status;
-    st.setAttribute('role', 'img');
-    st.setAttribute('aria-label', statusNames[f.status]);
-    if (f.status === 'working') st.innerHTML = '<span class="spin"></span>';
-    else if (f.status === 'done') st.innerHTML = '<svg class="ic" aria-hidden="true" focusable="false"><use href="#i-check"/></svg>';
-    else st.innerHTML = '<svg class="ic" aria-hidden="true" focusable="false"><use href="#i-x"/></svg>';
-
-    const nm = document.createElement('span');
-    nm.className = 'q-name';
-    nm.textContent = f.file.name;
-
-    const meta = document.createElement('span');
-    meta.className = 'q-meta';
-    const { ext } = splitExt(f.file.name);
-    meta.innerHTML = `<span class="q-ext">${escHtml((ext || '?').slice(0,6))}</span><span class="q-size">${formatBytes(f.file.size)}</span>`;
-
-    main.append(st, nm, meta);
-
-    const acts = document.createElement('span');
-    acts.className = 'q-acts';
-    if (f.status === 'error'){
-      const rb = document.createElement('button');
-      rb.type = 'button';
-      rb.className = 'q-act';
-      rb.dataset.retry = f.id;
-      rb.title = 'Повторить';
-      rb.setAttribute('aria-label', 'Повторить конвертацию: ' + f.file.name);
-      rb.innerHTML = '<svg class="ic" aria-hidden="true" focusable="false"><use href="#i-retry"/></svg>';
-      acts.appendChild(rb);
-    }
-    const db = document.createElement('button');
-    db.type = 'button';
-    db.className = 'q-act';
-    db.dataset.del = f.id;
-    db.title = 'Удалить из очереди';
-    db.setAttribute('aria-label', 'Удалить из очереди: ' + f.file.name);
-    db.innerHTML = '<svg class="ic" aria-hidden="true" focusable="false"><use href="#i-trash"/></svg>';
-    acts.appendChild(db);
-
-    row.append(main, acts);
-    list.appendChild(row);
-  });
+  updateQueueChrome();
 }
 
 /* ── просмотрщик ── */
@@ -1079,17 +1115,20 @@ function updateStats(){
   const lines = md.split('\n').length;
   el.textContent = `${md.length.toLocaleString('ru-RU')} симв · ${words.toLocaleString('ru-RU')} слов · ${lines.toLocaleString('ru-RU')} стрк`;
 }
-/* fail-closed: без DOMPurify предпросмотра нет; внешние сетевые источники вырезаются */
-function renderPreviewInto(root, md){
+/* fail-closed предпросмотр + кэш (правки меняют md → кэш сбрасывается сам) */
+function renderPreviewInto(root, f){
   if (!window.DOMPurify){
     root.textContent = 'Предпросмотр недоступен: не загрузился санитайзер (DOMPurify). Проверьте сеть или используйте режим «Разметка».';
     return;
   }
-  let html;
-  try { html = marked.parse(md); }
-  catch(e){ root.textContent = 'Не удалось отрисовать предпросмотр: ' + e.message; return; }
-  html = DOMPurify.sanitize(html, { USE_PROFILES: { html: true } });
-  root.innerHTML = html;
+  if (!f._pv || f._pv.md !== f.md){
+    let html;
+    try { html = marked.parse(f.md); }
+    catch(e){ root.textContent = 'Не удалось отрисовать предпросмотр: ' + e.message; return; }
+    html = DOMPurify.sanitize(html, { USE_PROFILES: { html: true } });
+    f._pv = { md: f.md, html };
+  }
+  root.innerHTML = f._pv.html;
   /* локальность: никаких исходящих запросов из предпросмотра */
   root.querySelectorAll('img,source,audio,video,track').forEach(el => {
     const s = (el.getAttribute('src') || el.getAttribute('srcset') || '').trim();
@@ -1134,8 +1173,12 @@ function renderViewer(){
     saveCursor(body); body.textContent = '';
     const s = document.createElement('div');
     s.className = 'v-state';
+    /* честный статус: реально конвертируется или ждёт своей очереди; прогресс обновляется на лету */
+    const msg = f.started
+      ? (f.progress || 'Конвертирую «' + f.file.name + '»…')
+      : '«' + f.file.name + '» ждёт в очереди — начну после текущих файлов';
     s.innerHTML = `<span class="spin" style="width:22px;height:22px;border-width:3px"></span>
-      <p>Конвертирую «${escHtml(f.file.name)}»…</p>`;
+      <p id="workMsg">${escHtml(msg)}</p>`;
     body.appendChild(s); return;
   }
   if (f.status === 'error'){
@@ -1150,10 +1193,10 @@ function renderViewer(){
     saveCursor(body); body.textContent = '';
     const p = document.createElement('div');
     p.className = 'prose';
-    renderPreviewInto(p, f.md);
+    renderPreviewInto(p, f);
     body.appendChild(p); return;
   }
-  /* разметка: редактор того же файла не пересоздаём — курсор и Ctrl+Z живут */
+  /* редактор того же файла не пересоздаём — курсор и Ctrl+Z живут */
   const existing = body.querySelector('.v-src');
   if (existing && existing.dataset.fileId === String(f.id)) return;
   saveCursor(body);
@@ -1171,7 +1214,6 @@ function renderViewer(){
     $('vName').title = 'файл отредактирован';
     clearTimeout(statsT); statsT = setTimeout(updateStats, 300);
   });
-  /* Tab (без модификаторов) — отступ; Shift+Tab свободно уводит фокус (WCAG 2.1.2) */
   ta.addEventListener('keydown', e => {
     if (e.key === 'Tab' && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey){
       e.preventDefault();
@@ -1202,7 +1244,7 @@ async function copyActive(){
 }
 function downloadActiveFile(){
   const f = activeFile();
-  if (!f || f.status !== 'done') return;
+  if (!f || f.status !== 'done'){ toast('Пока нечего скачивать', 'info'); return; }
   downloadText(outName(f.file), f.md);
   toast('Файл ' + outName(f.file) + ' скачан');
 }
@@ -1238,7 +1280,6 @@ function clearAll(){
 /* ═══════════════════════ события ═══════════════════════ */
 const dz = $('dropzone'), fileInputEl = $('fileInput'), dropTitleEl = $('dropTitle');
 
-/* программный click по file-input всплывал обратно к дропзоне и звал рекурсию — глушим */
 fileInputEl.addEventListener('click', e => e.stopPropagation());
 
 function openPicker(){
@@ -1248,7 +1289,6 @@ function openPicker(){
   }
 }
 dz.addEventListener('click', openPicker);
-/* клавиатура: Enter/Space на самой дропзоне (не на вложенной кнопке) */
 dz.addEventListener('keydown', e => {
   if (e.target !== dz) return;
   if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); openPicker(); }
@@ -1258,7 +1298,7 @@ fileInputEl.addEventListener('change', () => {
   fileInputEl.value = '';
 });
 
-/* drag & drop на всю страницу */
+/* drag & drop: перехватываем только ФАЙЛЫ — перенос текста в редактор работает */
 let dragDepth = 0;
 const dtHasFiles = e => e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files');
 function setDragging(on){
@@ -1268,14 +1308,13 @@ function setDragging(on){
 window.addEventListener('dragenter', e => { if (dtHasFiles(e)){ e.preventDefault(); if (!dragDepth) setDragging(true); dragDepth++; } });
 window.addEventListener('dragleave', e => { if (dtHasFiles(e)){ dragDepth = Math.max(0, dragDepth - 1); if (!dragDepth) setDragging(false); } });
 window.addEventListener('dragover', e => { if (dtHasFiles(e)) e.preventDefault(); });
-/* перехватываем только перетаскивание ФАЙЛОВ — обычный перенос текста работает как раньше */
 window.addEventListener('drop', e => {
   if (!dtHasFiles(e)) return;
   e.preventDefault(); dragDepth = 0; setDragging(false);
   if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files);
 });
 
-/* вставка из буфера: файлы, скриншоты, обычный текст */
+/* вставка из буфера */
 function normalizeClipboardFile(f){
   if (f.name && f.name.includes('.')) return f;
   const d = new Date();
@@ -1318,7 +1357,7 @@ window.addEventListener('paste', e => {
   }
 });
 
-/* очередь: делегированный клик (выбор / удалить / повторить) */
+/* очередь: делегированный клик */
  $('queueList').addEventListener('click', e => {
   const del = e.target.closest('[data-del]');
   if (del){ deleteEntry(Number(del.dataset.del)); return; }
@@ -1338,7 +1377,7 @@ window.addEventListener('paste', e => {
 });
  $('zipAllBtn').addEventListener('click', zipAll);
 
-/* очистка в два шага — без системного confirm() */
+/* очистка в два шага */
 let clearArmed = false, clearTimer = null;
 function resetClearArm(){
   clearArmed = false;
@@ -1360,7 +1399,7 @@ function resetClearArm(){
   }
 });
 
-/* вкладки Разметка/Предпросмотр: клик + стрелки */
+/* вкладки */
 document.querySelectorAll('.seg-btn').forEach(b => b.addEventListener('click', () => {
   state.view = b.dataset.view;
   renderViewer();
@@ -1376,21 +1415,23 @@ document.querySelector('.seg').addEventListener('keydown', e => {
  $('copyBtn').addEventListener('click', copyActive);
  $('dlBtn').addEventListener('click', downloadActiveFile);
 
-/* тумблеры: применяются к новым файлам; для старых — «переконвертировать всё» */
+/* тумблеры */
  $('optImages').addEventListener('change', e => {
   state.opts.embedImages = e.target.checked;
-  updateUI();
+  updateQueueChrome();
   toast('Встраивание изображений: ' + (e.target.checked ? 'вкл' : 'выкл') + ' — применюсь к новым файлам', 'info');
 });
  $('optGfm').addEventListener('change', e => {
   state.opts.gfm = e.target.checked;
-  updateUI();
+  updateQueueChrome();
   toast('Таблицы: ' + (e.target.checked ? 'GitHub (GFM)' : 'HTML-блоки') + ' — применюсь к новым файлам', 'info');
 });
  $('reconvertBtn').addEventListener('click', () => {
   state.files.filter(f => f.status === 'done' || f.status === 'error').forEach(f => {
     f.status = 'working'; f.error = null; f.md = '';
     f.cancelled = false; f.edited = false; f.cursor = null;
+    f.started = false; f.progress = null;
+    f._pv = null;
     f.opts = makeOpts(f);
     enqueue(f);
   });
@@ -1398,7 +1439,7 @@ document.querySelector('.seg').addEventListener('keydown', e => {
   toast('Переконвертирую с новыми параметрами', 'info');
 });
 
-/* Ctrl/Cmd+S — работает в любой раскладке (e.code не зависит от языка) */
+/* Ctrl/Cmd+S — работает в любой раскладке */
 window.addEventListener('keydown', e => {
   if ((e.ctrlKey || e.metaKey) && e.code === 'KeyS'){
     e.preventDefault();
